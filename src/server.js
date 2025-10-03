@@ -68,7 +68,6 @@ app.use(
 );
 app.use(
   cors({
-    origin: ENV.FRONTEND_ORIGIN || "http://localhost:5173",
     credentials: true,
   })
 );
