@@ -43,3 +43,4 @@ prisma/dev.db-journal
 .tmp/
 tmp/
 .temp/
+.env.example
