@@ -1,6 +1,16 @@
 import { Router } from "express";
 import bcrypt from "bcrypt";
-import { publicUser, requireAuth, randomToken, sha256Hex } from "../middleware/auth.js";
+import {
+  publicUser,
+  requireAuth,
+  randomToken,
+  sha256Hex,
+  signAccessToken,
+  signRefreshToken,
+  verifyRefreshToken,
+  setRefreshCookie,
+  clearRefreshCookie,
+} from "../middleware/auth.js";
 import { sendVerificationEmail } from "../services/mailer.js";
 import { verifyTelegramLogin } from "../services/telegram.js";
 
@@ -51,7 +61,11 @@ router.post("/register", async (req, res) => {
     }
 
     req.session.user = publicUser(user);
-    res.status(201).json({ user: publicUser(user) });
+    // Issue JWTs right after registration
+    const accessToken = signAccessToken(user);
+    const refreshToken = signRefreshToken(user);
+    setRefreshCookie(res, refreshToken);
+    res.status(201).json({ user: publicUser(user), accessToken });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "REGISTER_FAILED" });
@@ -67,8 +81,13 @@ router.post("/login", async (req, res) => {
     if (!user?.passwordHash) return res.status(401).json({ error: "INVALID_CREDENTIALS" });
     const ok = await bcrypt.compare(password, user.passwordHash);
     if (!ok) return res.status(401).json({ error: "INVALID_CREDENTIALS" });
+    // Session for backward-compatibility
     req.session.user = publicUser(user);
-    res.json({ user: publicUser(user) });
+    // JWT tokens
+    const accessToken = signAccessToken(user);
+    const refreshToken = signRefreshToken(user);
+    setRefreshCookie(res, refreshToken);
+    res.json({ user: publicUser(user), accessToken });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "LOGIN_FAILED" });
@@ -76,6 +95,7 @@ router.post("/login", async (req, res) => {
 });
 
 router.post("/logout", (req, res) => {
+  clearRefreshCookie(res);
   if (!req.session) return res.json({ ok: true });
   req.session.destroy(() => {
     res.clearCookie("sid");
@@ -83,8 +103,37 @@ router.post("/logout", (req, res) => {
   });
 });
 
-router.get("/me", (req, res) => {
-  res.json({ user: req.session?.user || null });
+router.get("/me", async (req, res) => {
+  if (req.session?.user) return res.json({ user: req.session.user });
+  try {
+    const authz = req.headers["authorization"] || req.headers["Authorization"];
+    if (!authz || !authz.toString().startsWith("Bearer ")) return res.json({ user: null });
+    const token = authz.toString().slice(7);
+    const { sub } = await import("jsonwebtoken").then(m => m.verify(token, process.env.JWT_ACCESS_SECRET || "dev_access_secret_change_me"));
+    const prisma = req.app.locals.prisma;
+    const user = await prisma.user.findUnique({ where: { id: sub } });
+    return res.json({ user: publicUser(user) });
+  } catch {
+    return res.json({ user: null });
+  }
+});
+
+router.post("/refresh", async (req, res) => {
+  try {
+    const token = req.cookies?.refresh_token;
+    if (!token) return res.status(401).json({ error: "NO_REFRESH" });
+    const payload = verifyRefreshToken(token);
+    const prisma = req.app.locals.prisma;
+    const user = await prisma.user.findUnique({ where: { id: payload.sub } });
+    if (!user) return res.status(401).json({ error: "INVALID_REFRESH" });
+    // rotate refresh
+    const newRefresh = signRefreshToken(user);
+    setRefreshCookie(res, newRefresh);
+    const accessToken = signAccessToken(user);
+    res.json({ accessToken, user: publicUser(user) });
+  } catch (e) {
+    return res.status(401).json({ error: "REFRESH_FAILED" });
+  }
 });
 
 router.get("/verify", async (req, res) => {
@@ -167,7 +216,11 @@ router.post("/telegram/verify", async (req, res) => {
       user = await prisma.user.update({ where: { id: user.id }, data: { name, firstName, lastName, telegramUsername, telegramPhotoUrl } });
     }
     req.session.user = publicUser(user);
-    res.json({ user: publicUser(user) });
+    // Issue JWTs for Telegram login as well
+    const accessToken = signAccessToken(user);
+    const refreshToken = signRefreshToken(user);
+    setRefreshCookie(res, refreshToken);
+    res.json({ user: publicUser(user), accessToken });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "TELEGRAM_VERIFY_FAILED" });

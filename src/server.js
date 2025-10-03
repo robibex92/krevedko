@@ -5,6 +5,7 @@ import helmet from "helmet";
 import cors from "cors";
 import morgan from "morgan";
 import session from "express-session";
+import cookieParser from "cookie-parser";
 import connectSqlite3 from "connect-sqlite3";
 import path from "path";
 import { fileURLToPath } from "url";
@@ -75,6 +76,7 @@ app.use(morgan("dev"));
 app.use(compression());
 app.use(express.json({ limit: `${Math.max(1, Number(UPLOAD_LIMIT_MB))}mb` }));
 app.use(express.urlencoded({ extended: true }));
+app.use(cookieParser());
 
 app.use(
   "/uploads",
