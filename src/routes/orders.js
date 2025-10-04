@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { sendTelegramMessage } from "../services/telegram.js";
 import { dec, isMultipleOf } from "../utils/decimal.js";
 import { getActiveCollections, resolveCollectionSelection } from "../services/collections.js";
 import { resolvePricingStep, makeOrderNumber } from "../services/pricing.js";
@@ -80,6 +81,29 @@ router.post("/cart/submit", requireAuth, async (req, res) => {
       }
       return createdOrders;
     });
+
+    // Best-effort admin notifications via Telegram
+    try {
+      const ADMIN_TELEGRAM_ID = process.env.ADMIN_TELEGRAM_ID || "245946670"; // default as requested
+      const { TELEGRAM_BOT_TOKEN, TELEGRAM_BOT_USERNAME } = process.env;
+      if (TELEGRAM_BOT_TOKEN && TELEGRAM_BOT_USERNAME && ADMIN_TELEGRAM_ID) {
+        // Load fresh user for richer data
+        const user = await prisma.user.findUnique({ where: { id: req.session.user.id } });
+        const fullName = [user?.firstName, user?.lastName].filter(Boolean).join(" ") || user?.name || "Пользователь";
+        const tgLine = user?.telegramUsername ? `@${user.telegramUsername}` : "аккаунт создан через почту";
+        const linesFor = (ord) => [
+          "На сайте создан новый заказ",
+          "",
+          `Номер заказа: ${ord.orderNumber}`,
+          `от: ${fullName}`,
+          `телеграм акк: ${tgLine}`,
+        ].join("\n");
+        const messages = transactionResult.map((ord) => sendTelegramMessage(ADMIN_TELEGRAM_ID, linesFor(ord)));
+        await Promise.allSettled(messages);
+      }
+    } catch (e) {
+      console.error("[orders] telegram admin notify failed", e);
+    }
 
     res.status(201).json({ orders: transactionResult.map((order) => ({ orderId: order.id, orderNumber: order.orderNumber, collectionId: order.collectionId })) });
   } catch (err) {

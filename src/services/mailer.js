@@ -27,9 +27,15 @@ export async function getMailer() {
   };
 }
 
+export async function sendEmail({ to, subject, html, text }) {
+  const mailer = await getMailer();
+  return mailer.sendMail({ from: EMAIL_FROM, to, subject, html, text });
+}
+
 export async function sendVerificationEmail(email, token) {
   const mailer = await getMailer();
-  const verifyUrl = `${APP_BASE_URL}/api/auth/verify?token=${encodeURIComponent(
+  // Link to frontend page which will call /api/auth/verify
+  const verifyUrl = `${APP_BASE_URL}/verify-email?token=${encodeURIComponent(
     token
   )}&email=${encodeURIComponent(email)}`;
   const html = `
