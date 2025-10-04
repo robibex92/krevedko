@@ -45,7 +45,6 @@ app.locals.csrfSecrets = new Map(); // sid -> secret
 
 app.locals.api = { baseUrl: API_URL, fetchJson: apiFetchJson };
 
-
 // Ensure runtime folders exist (uploads, session store)
 const uploadRoot = path.resolve(__dirname, "../uploads");
 const uploadProductsDir = path.join(uploadRoot, "products");
@@ -105,8 +104,18 @@ app.use(
 );
 
 // Rate limiters
-const authLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 100, standardHeaders: true, legacyHeaders: false });
-const apiLimiter = rateLimit({ windowMs: 60 * 1000, max: 1000, standardHeaders: true, legacyHeaders: false });
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 100,
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+const apiLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 1000,
+  standardHeaders: true,
+  legacyHeaders: false,
+});
 app.use("/api/auth", authLimiter);
 app.use("/api", apiLimiter);
 
@@ -116,11 +125,17 @@ app.use("/api/auth", authRouter);
 
 // CSRF endpoints/middleware
 app.get("/api/csrf", csrfIssue);
+app.use("/api/auth/refresh", (req, res, next) => {
+  // Skip CSRF for refresh endpoint as it uses secure cookies
+  next();
+});
 app.use(csrfProtect);
 
 // Example secured pings
 app.get("/api/secure/ping", requireAuth, (_req, res) => res.json({ ok: true }));
-app.get("/api/admin/ping", requireAuth, requireAdmin, (_req, res) => res.json({ ok: true, role: "ADMIN" }));
+app.get("/api/admin/ping", requireAuth, requireAdmin, (_req, res) =>
+  res.json({ ok: true, role: "ADMIN" })
+);
 
 // Domain routers
 app.use("/api", collectionsRouter);
