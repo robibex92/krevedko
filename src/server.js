@@ -68,14 +68,11 @@ app.use(compression());
 
 // Middleware
 app.use(express.json({ limit: "50mb" }));
-app.use(cors({
-  origin: process.env.FRONTEND_ORIGIN,   // https://test.sibroot.ru
-  credentials: true,
-}));
-app.options('*', cors({
-  origin: process.env.FRONTEND_ORIGIN,
-  credentials: true,
-}));
+app.use(
+  cors({
+    credentials: true,
+  })
+);
 app.use(cookieParser());
 app.use(express.urlencoded({ limit: "50mb", extended: true }));
 app.use(
