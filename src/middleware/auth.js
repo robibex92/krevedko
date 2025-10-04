@@ -74,8 +74,12 @@ export function signAccessToken(user) {
 }
 
 export function signRefreshToken(user) {
-  const payload = { sub: user.id, type: "refresh" };
-  return jwt.sign(payload, JWT_REFRESH_SECRET, { expiresIn: JWT_REFRESH_TTL });
+  const jti = randomToken(16);
+  const payload = { sub: user.id, type: "refresh", jti };
+  const token = jwt.sign(payload, JWT_REFRESH_SECRET, { expiresIn: JWT_REFRESH_TTL });
+  const decoded = jwt.decode(token);
+  const exp = decoded?.exp || null; // seconds since epoch
+  return { token, jti, exp };
 }
 
 export function verifyRefreshToken(token) {

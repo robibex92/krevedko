@@ -63,7 +63,20 @@ router.post("/register", async (req, res) => {
     req.session.user = publicUser(user);
     // Issue JWTs right after registration
     const accessToken = signAccessToken(user);
-    const refreshToken = signRefreshToken(user);
+    const { token: refreshToken, jti, exp } = signRefreshToken(user);
+    // Persist refresh token
+    try {
+      await prisma.refreshToken.create({
+        data: {
+          userId: user.id,
+          jti,
+          expiresAt: exp ? new Date(exp * 1000) : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+          createdByIp: req.ip || null,
+        },
+      });
+    } catch (e) {
+      console.error("[auth] failed to persist refresh token on register", e);
+    }
     setRefreshCookie(res, refreshToken);
     res.status(201).json({ user: publicUser(user), accessToken });
   } catch (err) {
@@ -85,7 +98,19 @@ router.post("/login", async (req, res) => {
     req.session.user = publicUser(user);
     // JWT tokens
     const accessToken = signAccessToken(user);
-    const refreshToken = signRefreshToken(user);
+    const { token: refreshToken, jti, exp } = signRefreshToken(user);
+    try {
+      await prisma.refreshToken.create({
+        data: {
+          userId: user.id,
+          jti,
+          expiresAt: exp ? new Date(exp * 1000) : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+          createdByIp: req.ip || null,
+        },
+      });
+    } catch (e) {
+      console.error("[auth] failed to persist refresh token on login", e);
+    }
     setRefreshCookie(res, refreshToken);
     res.json({ user: publicUser(user), accessToken });
   } catch (err) {
@@ -94,13 +119,27 @@ router.post("/login", async (req, res) => {
   }
 });
 
-router.post("/logout", (req, res) => {
-  clearRefreshCookie(res);
-  if (!req.session) return res.json({ ok: true });
-  req.session.destroy(() => {
-    res.clearCookie("sid");
-    res.json({ ok: true });
-  });
+router.post("/logout", async (req, res) => {
+  try {
+    const token = req.cookies?.refresh_token;
+    if (token) {
+      try {
+        const payload = verifyRefreshToken(token);
+        const prisma = req.app.locals.prisma;
+        await prisma.refreshToken.updateMany({
+          where: { jti: payload.jti, revokedAt: null },
+          data: { revokedAt: new Date() },
+        });
+      } catch {}
+    }
+  } finally {
+    clearRefreshCookie(res);
+    if (!req.session) return res.json({ ok: true });
+    req.session.destroy(() => {
+      res.clearCookie("sid");
+      res.json({ ok: true });
+    });
+  }
 });
 
 router.get("/me", async (req, res) => {
@@ -126,9 +165,30 @@ router.post("/refresh", async (req, res) => {
     const prisma = req.app.locals.prisma;
     const user = await prisma.user.findUnique({ where: { id: payload.sub } });
     if (!user) return res.status(401).json({ error: "INVALID_REFRESH" });
+
+    // DB validation of refresh token state
+    const dbToken = await prisma.refreshToken.findUnique({ where: { jti: payload.jti } });
+    if (!dbToken || dbToken.revokedAt || dbToken.expiresAt < new Date()) {
+      return res.status(401).json({ error: "REFRESH_REVOKED_OR_EXPIRED" });
+    }
+
     // rotate refresh
-    const newRefresh = signRefreshToken(user);
-    setRefreshCookie(res, newRefresh);
+    const { token: newToken, jti: newJti, exp } = signRefreshToken(user);
+    await prisma.$transaction([
+      prisma.refreshToken.update({
+        where: { jti: payload.jti },
+        data: { revokedAt: new Date(), replacedByJti: newJti },
+      }),
+      prisma.refreshToken.create({
+        data: {
+          userId: user.id,
+          jti: newJti,
+          expiresAt: exp ? new Date(exp * 1000) : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+          createdByIp: req.ip || null,
+        },
+      }),
+    ]);
+    setRefreshCookie(res, newToken);
     const accessToken = signAccessToken(user);
     res.json({ accessToken, user: publicUser(user) });
   } catch (e) {
@@ -218,7 +278,19 @@ router.post("/telegram/verify", async (req, res) => {
     req.session.user = publicUser(user);
     // Issue JWTs for Telegram login as well
     const accessToken = signAccessToken(user);
-    const refreshToken = signRefreshToken(user);
+    const { token: refreshToken, jti, exp } = signRefreshToken(user);
+    try {
+      await prisma.refreshToken.create({
+        data: {
+          userId: user.id,
+          jti,
+          expiresAt: exp ? new Date(exp * 1000) : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+          createdByIp: req.ip || null,
+        },
+      });
+    } catch (e) {
+      console.error("[auth] failed to persist refresh token on telegram verify", e);
+    }
     setRefreshCookie(res, refreshToken);
     res.json({ user: publicUser(user), accessToken });
   } catch (err) {

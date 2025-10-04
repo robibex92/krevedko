@@ -38,9 +38,7 @@ model User {
   referrals     User[]     @relation("UserReferrals")
   referrer      User?      @relation("UserReferrals", fields: [referredBy], references: [id])
   publicReviews PublicReview[]
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  refreshTokens RefreshToken[]
 }
 
 model Collection {
@@ -244,5 +242,17 @@ model AnalyticsEvent {
   @@index([createdAt])
 }
 
-// Example for local SQLite:
-// DATABASE_URL="file:./dev.db"
+model RefreshToken {
+  id            Int      @id @default(autoincrement())
+  userId        Int
+  jti           String   @unique
+  createdAt     DateTime @default(now())
+  expiresAt     DateTime
+  revokedAt     DateTime?
+  createdByIp   String?
+  replacedByJti String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
