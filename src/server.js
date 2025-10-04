@@ -61,29 +61,20 @@ fs.mkdirSync(sessionDir, { recursive: true });
 
 // Core middlewares
 app.set("trust proxy", 1);
-app.use(
-  helmet({
-    crossOriginResourcePolicy: { policy: "cross-origin" },
-  })
-);
-// CORS: allow credentialed requests from configured origin (or reflect request origin)
-const FRONTEND_ORIGIN = process.env.FRONTEND_ORIGIN || true; // e.g. http://localhost:5173 or https://app.example.com
-const corsOptions = {
-  origin: FRONTEND_ORIGIN,
-  credentials: true,
-  methods: ["GET", "HEAD", "PUT", "PATCH", "POST", "DELETE", "OPTIONS"],
-  allowedHeaders: ["Content-Type", "Authorization", "X-CSRF-Token"],
-  optionsSuccessStatus: 204,
-};
-app.use(cors(corsOptions));
-// Ensure preflight is handled
-app.options("*", cors(corsOptions));
+
+
 app.use(morgan("dev"));
 app.use(compression());
-app.use(express.json({ limit: `${Math.max(1, Number(UPLOAD_LIMIT_MB))}mb` }));
-app.use(express.urlencoded({ extended: true }));
-app.use(cookieParser());
 
+// Middleware
+app.use(express.json({ limit: "50mb" }));
+app.use(
+  cors({
+    credentials: true,
+  })
+);
+app.use(cookieParser());
+app.use(express.urlencoded({ limit: "50mb", extended: true }));
 app.use(
   "/uploads",
   express.static(uploadRoot, {
