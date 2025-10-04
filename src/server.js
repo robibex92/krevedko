@@ -97,7 +97,7 @@ app.use(
     store: new SQLiteStore({ db: "sessions.sqlite", dir: sessionDir }),
     cookie: {
       httpOnly: true,
-      sameSite: "lax",
+      sameSite: NODE_ENV === "production" ? "none" : "lax",
       secure: NODE_ENV === "production",
       maxAge: 1000 * 60 * 60 * 24 * 7,
     },
@@ -123,10 +123,14 @@ app.use("/api", apiLimiter);
 // CSRF endpoints/middleware
 app.get("/api/csrf", csrfIssue);
 
-// Apply CSRF protection with exception for refresh endpoint
+// Apply CSRF protection with exception for auth endpoints that don't rely on session CSRF
 app.use((req, res, next) => {
-  // Skip CSRF for refresh endpoint as it uses secure cookies
-  if (req.path === "/api/auth/refresh") {
+  // Skip CSRF for auth endpoints that use JWT or secure refresh cookie
+  if (
+    req.path === "/api/auth/refresh" ||
+    req.path === "/api/auth/login" ||
+    req.path === "/api/auth/register"
+  ) {
     return next();
   }
   csrfProtect(req, res, next);
