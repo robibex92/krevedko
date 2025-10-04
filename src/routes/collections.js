@@ -81,33 +81,64 @@ router.get("/products", async (req, res) => {
     const cached = getCached(cacheKey);
     if (cached) return res.json(cached);
 
+    const activeProducts = await prisma.product.findMany({
+      where: { isActive: true },
+      orderBy: { id: "asc" },
+    });
+
     const collectionsPayload = [];
     for (const col of targetCollections) {
-      const cps = await prisma.collectionProduct.findMany({
-        where: { collectionId: col.id, isActive: true },
-        include: { product: true },
+      const overrides = await prisma.collectionProduct.findMany({
+        where: { collectionId: col.id },
       });
+      const overrideByProductId = new Map(overrides.map((cp) => [cp.productId, cp]));
 
-      const products = cps
-        .filter((cp) => cp.product.isActive)
-        .map((cp) => ({
-          id: cp.product.id,
-          title: cp.product.title,
-          description: cp.product.description,
-          category: cp.product.category,
-          imagePath: cp.product.imagePath,
-          unitLabel: cp.product.unitLabel,
-          stepDecimal: (cp.stepOverrideDecimal ?? cp.product.stepDecimal).toString(),
-          priceKopecks: cp.priceOverrideKopecks ?? cp.product.priceKopecks,
-          stockQuantity: cp.product.stockQuantity.toString(),
-          minStock: cp.product.minStock.toString(),
-          stockOverride: cp.stockOverride ? cp.stockOverride.toString() : null,
-          displayStockHint: cp.displayStockHint || cp.product.displayStockHint,
-          isAvailable: cp.product.isActive && cp.isActive !== false && (cp.displayStockHint || cp.product.displayStockHint) !== "OUT",
-          tags: cp.product.tags ? JSON.parse(cp.product.tags) : null,
-          searchKeywords: cp.product.searchKeywords,
-          collectionId: col.id,
-        }));
+      const products = activeProducts
+        .map((product) => {
+          const cp = overrideByProductId.get(product.id);
+          if (cp?.isActive === false) return null;
+
+          const stepDecimal = cp?.stepOverrideDecimal ?? product.stepDecimal;
+          const priceKopecks = cp?.priceOverrideKopecks ?? product.priceKopecks;
+          const displayStockHint = cp?.displayStockHint || product.displayStockHint || null;
+          let tags = null;
+          if (product.tags) {
+            try {
+              tags = JSON.parse(product.tags);
+            } catch {
+              tags = null;
+            }
+          }
+
+          return {
+            id: product.id,
+            title: product.title,
+            description: product.description,
+            category: product.category,
+            imagePath: product.imagePath,
+            unitLabel: product.unitLabel,
+            stepDecimal: stepDecimal && typeof stepDecimal.toString === "function" ? stepDecimal.toString() : String(stepDecimal ?? ""),
+            priceKopecks: Number(priceKopecks),
+            stockQuantity: product.stockQuantity && typeof product.stockQuantity.toString === "function"
+              ? product.stockQuantity.toString()
+              : String(product.stockQuantity ?? ""),
+            minStock: product.minStock && typeof product.minStock.toString === "function"
+              ? product.minStock.toString()
+              : String(product.minStock ?? ""),
+            stockOverride:
+              cp?.stockOverride != null
+                ? typeof cp.stockOverride.toString === "function"
+                  ? cp.stockOverride.toString()
+                  : String(cp.stockOverride)
+                : null,
+            displayStockHint,
+            isAvailable: product.isActive && (cp?.isActive !== false) && displayStockHint !== "OUT",
+            tags,
+            searchKeywords: product.searchKeywords,
+            collectionId: col.id,
+          };
+        })
+        .filter(Boolean);
 
       collectionsPayload.push({
         collection: { id: col.id, title: col.title, startsAt: col.startsAt, endsAt: col.endsAt, status: col.status },
