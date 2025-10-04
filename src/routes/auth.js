@@ -143,6 +143,10 @@ router.post("/logout", async (req, res) => {
 });
 
 router.get("/me", async (req, res) => {
+  // Disable caching to avoid 304 responses breaking fetch handling on the frontend
+  res.set("Cache-Control", "no-store, no-cache, must-revalidate");
+  res.set("Pragma", "no-cache");
+  res.set("Expires", "0");
   if (req.session?.user) return res.json({ user: req.session.user });
   try {
     const authz = req.headers["authorization"] || req.headers["Authorization"];
