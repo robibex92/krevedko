@@ -119,17 +119,18 @@ const apiLimiter = rateLimit({
 app.use("/api/auth", authLimiter);
 app.use("/api", apiLimiter);
 
+// CSRF endpoints/middleware
+app.get("/api/csrf", csrfIssue);
+
+// Skip CSRF for refresh endpoint as it uses secure cookies
+app.use("/api/auth/refresh", (req, res, next) => next());
+
+// Apply CSRF protection to all other routes
+app.use(csrfProtect);
+
 // Public and auth routers
 app.use("/api", publicRouter);
 app.use("/api/auth", authRouter);
-
-// CSRF endpoints/middleware
-app.get("/api/csrf", csrfIssue);
-app.use("/api/auth/refresh", (req, res, next) => {
-  // Skip CSRF for refresh endpoint as it uses secure cookies
-  next();
-});
-app.use(csrfProtect);
 
 // Example secured pings
 app.get("/api/secure/ping", requireAuth, (_req, res) => res.json({ ok: true }));
