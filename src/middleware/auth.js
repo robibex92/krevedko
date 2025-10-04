@@ -8,6 +8,17 @@ const {
   JWT_REFRESH_TTL = "30d",
   NODE_ENV = "development",
 } = process.env;
+const COOKIE_BASE_PATH = (process.env.COOKIE_BASE_PATH || "").replace(/\/$/, ""); // e.g. "/api-v3"
+const REFRESH_COOKIE_PATH = `${COOKIE_BASE_PATH}/api/auth` || "/api/auth";
+
+function resolveUserId(sub) {
+  if (typeof sub === "number" && Number.isInteger(sub)) return sub;
+  if (typeof sub === "string" && /^[0-9]+$/.test(sub)) {
+    const parsed = Number.parseInt(sub, 10);
+    if (Number.isInteger(parsed)) return parsed;
+  }
+  return null;
+}
 
 export async function requireAuth(req, res, next) {
   // 1) Session-based auth (backward compatibility)
@@ -21,9 +32,11 @@ export async function requireAuth(req, res, next) {
     }
     const token = authz.toString().slice(7);
     const payload = jwt.verify(token, JWT_ACCESS_SECRET);
+    const userId = resolveUserId(payload?.sub);
+    if (userId === null) return res.status(401).json({ error: "UNAUTHORIZED" });
     const prisma = req.app?.locals?.prisma;
     if (!prisma) return res.status(500).json({ error: "PRISMA_NOT_AVAILABLE" });
-    const user = await prisma.user.findUnique({ where: { id: payload.sub } });
+    const user = await prisma.user.findUnique({ where: { id: userId } });
     if (!user) return res.status(401).json({ error: "UNAUTHORIZED" });
     // To not refactor routes, populate session-like shape
     req.session = req.session || {};
@@ -91,11 +104,13 @@ export function setRefreshCookie(res, token) {
     httpOnly: true,
     sameSite: NODE_ENV === "production" ? "none" : "lax",
     secure: NODE_ENV === "production",
-    path: "/api/auth",
+    path: REFRESH_COOKIE_PATH,
     maxAge: 1000 * 60 * 60 * 24 * 30, // 30d
   });
 }
 
 export function clearRefreshCookie(res) {
-  res.clearCookie("refresh_token", { path: "/api/auth" });
+  res.clearCookie("refresh_token", { path: REFRESH_COOKIE_PATH });
 }
+
+export { resolveUserId };

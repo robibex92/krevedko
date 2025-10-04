@@ -1,5 +1,6 @@
 import { Router } from "express";
 import bcrypt from "bcrypt";
+import jwt from "jsonwebtoken";
 import {
   publicUser,
   requireAuth,
@@ -10,6 +11,7 @@ import {
   verifyRefreshToken,
   setRefreshCookie,
   clearRefreshCookie,
+  resolveUserId,
 } from "../middleware/auth.js";
 import { sendVerificationEmail } from "../services/mailer.js";
 import { verifyTelegramLogin } from "../services/telegram.js";
@@ -152,9 +154,14 @@ router.get("/me", async (req, res) => {
     const authz = req.headers["authorization"] || req.headers["Authorization"];
     if (!authz || !authz.toString().startsWith("Bearer ")) return res.json({ user: null });
     const token = authz.toString().slice(7);
-    const { sub } = await import("jsonwebtoken").then(m => m.verify(token, process.env.JWT_ACCESS_SECRET || "dev_access_secret_change_me"));
+    const payload = jwt.verify(token, process.env.JWT_ACCESS_SECRET || "dev_access_secret_change_me");
+    const userId = resolveUserId(payload?.sub);
+    if (userId === null) return res.json({ user: null });
     const prisma = req.app.locals.prisma;
-    const user = await prisma.user.findUnique({ where: { id: sub } });
+    const user = await prisma.user.findUnique({ where: { id: userId } });
+    if (!user) return res.json({ user: null });
+    req.session = req.session || {};
+    req.session.user = publicUser(user);
     return res.json({ user: publicUser(user) });
   } catch {
     return res.json({ user: null });
@@ -167,7 +174,9 @@ router.post("/refresh", async (req, res) => {
     if (!token) return res.status(401).json({ error: "NO_REFRESH" });
     const payload = verifyRefreshToken(token);
     const prisma = req.app.locals.prisma;
-    const user = await prisma.user.findUnique({ where: { id: payload.sub } });
+    const userId = resolveUserId(payload?.sub);
+    if (userId === null) return res.status(401).json({ error: "INVALID_REFRESH" });
+    const user = await prisma.user.findUnique({ where: { id: userId } });
     if (!user) return res.status(401).json({ error: "INVALID_REFRESH" });
 
     // DB validation of refresh token state
@@ -194,6 +203,8 @@ router.post("/refresh", async (req, res) => {
     ]);
     setRefreshCookie(res, newToken);
     const accessToken = signAccessToken(user);
+    req.session = req.session || {};
+    req.session.user = publicUser(user);
     res.json({ accessToken, user: publicUser(user) });
   } catch (e) {
     return res.status(401).json({ error: "REFRESH_FAILED" });
