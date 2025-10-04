@@ -84,6 +84,10 @@ app.use(
     immutable: false,
     maxAge: "1d",
     fallthrough: true,
+    setHeaders: (res, filePath) => {
+      // Allow cross-origin embedding of images/files
+      res.setHeader("Cross-Origin-Resource-Policy", "cross-origin");
+    },
   })
 );
 
