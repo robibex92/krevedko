@@ -185,7 +185,21 @@ router.post("/refresh", async (req, res) => {
       return res.status(401).json({ error: "REFRESH_REVOKED_OR_EXPIRED" });
     }
 
-    // rotate refresh
+    // Decide whether to rotate refresh token
+    const now = Date.now();
+    const remainingMs = dbToken.expiresAt.getTime() - now;
+    const ROTATE_THRESHOLD_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
+
+    let accessToken;
+    if (remainingMs > ROTATE_THRESHOLD_MS) {
+      // Keep existing refresh token, only issue a new access token
+      accessToken = signAccessToken(user);
+      req.session = req.session || {};
+      req.session.user = publicUser(user);
+      return res.json({ accessToken, user: publicUser(user) });
+    }
+
+    // Rotate refresh (close to expiry)
     const { token: newToken, jti: newJti, exp } = signRefreshToken(user);
     await prisma.$transaction([
       prisma.refreshToken.update({
@@ -196,13 +210,13 @@ router.post("/refresh", async (req, res) => {
         data: {
           userId: user.id,
           jti: newJti,
-          expiresAt: exp ? new Date(exp * 1000) : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+          expiresAt: exp ? new Date(exp * 1000) : new Date(now + 30 * 24 * 60 * 60 * 1000),
           createdByIp: req.ip || null,
         },
       }),
     ]);
     setRefreshCookie(res, newToken);
-    const accessToken = signAccessToken(user);
+    accessToken = signAccessToken(user);
     req.session = req.session || {};
     req.session.user = publicUser(user);
     res.json({ accessToken, user: publicUser(user) });
