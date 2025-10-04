@@ -7,10 +7,14 @@ export function csrfIssue(req, res) {
   req.app.locals.csrfSecrets.set(sid, secret);
   res.json({ csrfToken: secret });
 }
-
 export function csrfProtect(req, res, next) {
   const method = req.method.toUpperCase();
   if (["GET", "HEAD", "OPTIONS"].includes(method)) return next();
+  // If request carries a Bearer JWT, skip CSRF checks (stateless auth is not CSRF-prone)
+  const authz = req.headers["authorization"] || req.headers["Authorization"];
+  if (authz && authz.toString().startsWith("Bearer ")) {
+    return next();
+  }
   const sid = req.sessionID;
   if (!sid) return res.status(401).json({ error: "UNAUTHORIZED" });
   const expected = req.app.locals.csrfSecrets.get(sid);
@@ -20,3 +24,4 @@ export function csrfProtect(req, res, next) {
   }
   next();
 }
+

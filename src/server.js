@@ -122,11 +122,14 @@ app.use("/api", apiLimiter);
 // CSRF endpoints/middleware
 app.get("/api/csrf", csrfIssue);
 
-// Skip CSRF for refresh endpoint as it uses secure cookies
-app.use("/api/auth/refresh", (req, res, next) => next());
-
-// Apply CSRF protection to all other routes
-app.use(csrfProtect);
+// Apply CSRF protection with exception for refresh endpoint
+app.use((req, res, next) => {
+  // Skip CSRF for refresh endpoint as it uses secure cookies
+  if (req.path === "/api/auth/refresh") {
+    return next();
+  }
+  csrfProtect(req, res, next);
+});
 
 // Public and auth routers
 app.use("/api", publicRouter);
