@@ -17,14 +17,22 @@ for (const dir of [uploadProductsDir, uploadPaymentsDir, uploadAvatarsDir, uploa
   fs.mkdirSync(dir, { recursive: true });
 }
 
-const imageMimes = new Set(["image/jpeg", "image/png", "image/webp"]);
+// Allow common image formats; include HEIC/HEIF as some iPhones upload these
+const imageMimes = new Set(["image/jpeg", "image/png", "image/webp", "image/heic", "image/heif"]);
 
 export function makeMulterStorage(dir) {
   return multer.diskStorage({
     destination: (_req, _file, cb) => cb(null, dir),
     filename: (_req, file, cb) => {
       const ext = path.extname(file.originalname || "").toLowerCase();
-      const safeExt = [".jpg", ".jpeg", ".png", ".webp"].includes(ext) ? ext : "";
+      // Map HEIC/HEIF (or missing ext) to .jpg to ensure web compatibility.
+      // Note: this does not transcode content, only sets extension; consumers should handle display.
+      const isHeic = /\.(heic|heif)$/i.test(ext);
+      const safeExt = !ext || isHeic
+        ? ".jpg"
+        : [".jpg", ".jpeg", ".png", ".webp"].includes(ext)
+          ? ext
+          : "";
       const name = `${Date.now()}-${crypto.randomBytes(6).toString("hex")}${safeExt}`;
       cb(null, name);
     },
@@ -32,7 +40,10 @@ export function makeMulterStorage(dir) {
 }
 
 export function makeImageUpload({ dir, maxFiles = 1, fileSizeMb = 5 }) {
-  const uploadLimitBytes = Math.max(1, Number(fileSizeMb)) * 1024 * 1024;
+  // Allow overriding via env variable UPLOAD_LIMIT_MB
+  const envLimit = Number(process.env.UPLOAD_LIMIT_MB);
+  const effectiveMb = Number.isFinite(envLimit) && envLimit > 0 ? envLimit : Number(fileSizeMb);
+  const uploadLimitBytes = Math.max(1, Number(effectiveMb)) * 1024 * 1024;
   return multer({
     storage: makeMulterStorage(dir),
     limits: { fileSize: uploadLimitBytes, files: maxFiles },
@@ -47,3 +58,4 @@ export const paymentUpload = makeImageUpload({ dir: uploadPaymentsDir });
 export const avatarUpload = makeImageUpload({ dir: uploadAvatarsDir });
 export const productUpload = makeImageUpload({ dir: uploadProductsDir });
 export const reviewUpload = makeImageUpload({ dir: uploadReviewsDir, maxFiles: 5 });
+
