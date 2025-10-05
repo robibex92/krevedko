@@ -164,19 +164,47 @@ router.patch("/admin/products/:id", requireAuth, requireAdmin, async (req, res) 
   }
 });
 
-router.post("/admin/products/:id/image", requireAuth, requireAdmin, productUpload.single("image"), async (req, res) => {
-  const prisma = req.app.locals.prisma;
-  try {
-    const id = Number(req.params.id);
-    if (!req.file) return res.status(400).json({ error: "NO_FILE" });
-    const relPath = ["products", req.file.filename].join("/");
-    const p = await prisma.product.update({ where: { id }, data: { imagePath: relPath } });
-    res.json({ product: p });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "PRODUCT_IMAGE_UPLOAD_FAILED" });
+// Upload product image
+router.post(
+  "/admin/products/:id/image",
+  requireAuth,
+  requireAdmin,
+  productUpload.single("image"),
+  async (req, res) => {
+    const prisma = req.app.locals.prisma;
+    try {
+      const id = Number(req.params.id);
+      if (!req.file) return res.status(400).json({ error: "NO_FILE" });
+
+      // относительный путь в /uploads
+      const relPath = ["products", req.file.filename].join("/");
+      const url = `/uploads/${relPath}`;
+
+      // сохраняем путь в базу
+      const p = await prisma.product.update({
+        where: { id },
+        data: { imagePath: relPath },
+      });
+
+      // возвращаем вместе с url для фронта
+      res.json({
+        product: { ...p, imageUrl: url },
+        file: {
+          filename: req.file.filename,
+          mimetype: req.file.mimetype,
+          size: req.file.size,
+          url,
+        },
+      });
+    } catch (err) {
+      console.error(err);
+      res
+        .status(500)
+        .json({ error: "PRODUCT_IMAGE_UPLOAD_FAILED", message: err.message });
+    }
   }
-});
+);
+
 
 // Per-collection product overrides
 router.patch("/admin/collections/:collectionId/products/:productId", requireAuth, requireAdmin, async (req, res) => {
