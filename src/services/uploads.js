@@ -17,8 +17,16 @@ for (const dir of [uploadProductsDir, uploadPaymentsDir, uploadAvatarsDir, uploa
   fs.mkdirSync(dir, { recursive: true });
 }
 
-// Allow common image formats; include HEIC/HEIF as some iPhones upload these
-const imageMimes = new Set(["image/jpeg", "image/png", "image/webp", "image/heic", "image/heif"]);
+// Allow common image formats; include HEIC/HEIF and JPEG variants some browsers use
+const imageMimes = new Set([
+  "image/jpeg",
+  "image/jpg",
+  "image/pjpeg",
+  "image/png",
+  "image/webp",
+  "image/heic",
+  "image/heif",
+]);
 
 export function makeMulterStorage(dir) {
   return multer.diskStorage({

@@ -132,6 +132,8 @@ router.get("/products", async (req, res) => {
                   : String(cp.stockOverride)
                 : null,
             displayStockHint,
+            // Only use product-level flag per requirement; ignore collection override
+            canPickupNow: Boolean(product.canPickupNow),
             isAvailable: product.isActive && (cp?.isActive !== false) && displayStockHint !== "OUT",
             tags,
             searchKeywords: product.searchKeywords,

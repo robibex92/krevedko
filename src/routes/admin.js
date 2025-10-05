@@ -74,7 +74,7 @@ router.get("/admin/products", requireAuth, requireAdmin, async (req, res) => {
 router.post("/admin/products", requireAuth, requireAdmin, async (req, res) => {
   const prisma = req.app.locals.prisma;
   try {
-    const { title, description, category, unitLabel, stepDecimal, priceKopecks, isActive, stockQuantity, minStock, tags, searchKeywords, displayStockHint } = req.body || {};
+    const { title, description, category, unitLabel, stepDecimal, priceKopecks, isActive, stockQuantity, minStock, tags, searchKeywords, displayStockHint, canPickupNow } = req.body || {};
     if (!title || !unitLabel || stepDecimal === undefined || priceKopecks === undefined) {
       return res.status(400).json({ error: "REQUIRED_FIELDS_MISSING" });
     }
@@ -92,6 +92,7 @@ router.post("/admin/products", requireAuth, requireAdmin, async (req, res) => {
         tags: tags ? JSON.stringify(tags) : null,
         searchKeywords: searchKeywords || null,
         displayStockHint: displayStockHint ? String(displayStockHint) : null,
+        canPickupNow: canPickupNow !== undefined ? Boolean(canPickupNow) : false,
       },
     });
     clearCache("products");
@@ -139,7 +140,7 @@ router.patch("/admin/products/:id", requireAuth, requireAdmin, async (req, res) 
   const prisma = req.app.locals.prisma;
   try {
     const id = Number(req.params.id);
-    const { title, description, category, unitLabel, stepDecimal, priceKopecks, isActive, displayStockHint } = req.body || {};
+    const { title, description, category, unitLabel, stepDecimal, priceKopecks, isActive, displayStockHint, canPickupNow } = req.body || {};
     const { tags, searchKeywords } = req.body || {};
     const data = {};
     if (title !== undefined) data.title = title;
@@ -150,6 +151,7 @@ router.patch("/admin/products/:id", requireAuth, requireAdmin, async (req, res) 
     if (priceKopecks !== undefined) data.priceKopecks = Number(priceKopecks);
     if (isActive !== undefined) data.isActive = Boolean(isActive);
     if (displayStockHint !== undefined) data.displayStockHint = displayStockHint ? String(displayStockHint) : null;
+    if (canPickupNow !== undefined) data.canPickupNow = Boolean(canPickupNow);
     if (tags !== undefined) data.tags = Array.isArray(tags) ? (tags.length ? JSON.stringify(tags) : null) : (tags ? JSON.stringify(tags) : null);
     if (searchKeywords !== undefined) data.searchKeywords = searchKeywords || null;
     const p = await prisma.product.update({ where: { id }, data });
@@ -182,7 +184,7 @@ router.patch("/admin/collections/:collectionId/products/:productId", requireAuth
   try {
     const collectionId = Number(req.params.collectionId);
     const productId = Number(req.params.productId);
-    const { priceOverrideKopecks, stepOverrideDecimal, isActive } = req.body || {};
+    const { priceOverrideKopecks, stepOverrideDecimal, isActive, canPickupNow } = req.body || {};
     const cp = await prisma.collectionProduct.upsert({
       where: { collectionId_productId: { collectionId, productId } },
       update: {
@@ -191,6 +193,7 @@ router.patch("/admin/collections/:collectionId/products/:productId", requireAuth
         isActive: isActive !== undefined ? Boolean(isActive) : undefined,
         stockOverride: req.body?.stockOverride !== undefined ? (req.body.stockOverride === null ? null : String(req.body.stockOverride)) : undefined,
         displayStockHint: req.body?.displayStockHint !== undefined ? req.body.displayStockHint : undefined,
+        canPickupNow: canPickupNow !== undefined ? (canPickupNow === null ? null : Boolean(canPickupNow)) : undefined,
       },
       create: {
         collectionId,
@@ -200,6 +203,7 @@ router.patch("/admin/collections/:collectionId/products/:productId", requireAuth
         isActive: isActive !== undefined ? Boolean(isActive) : true,
         stockOverride: req.body?.stockOverride !== undefined ? (req.body.stockOverride === null ? null : String(req.body.stockOverride)) : null,
         displayStockHint: req.body?.displayStockHint !== undefined ? req.body.displayStockHint : null,
+        canPickupNow: canPickupNow !== undefined ? (canPickupNow === null ? null : Boolean(canPickupNow)) : null,
       },
     });
     clearCache("products");

@@ -70,6 +70,7 @@ model Product {
   stockQuantity Decimal @default(0)
   minStock     Decimal  @default(0)
   displayStockHint String? // "LOW" | "HIGH"
+  canPickupNow   Boolean  @default(false)
   tags         String?  // JSON array of tags for search
   searchKeywords String? // Additional search keywords
 

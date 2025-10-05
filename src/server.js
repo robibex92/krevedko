@@ -25,6 +25,7 @@ import favoritesRouter from "./routes/favorites.js";
 import profileRouter from "./routes/profile.js";
 import publicReviewsRouter from "./routes/public-reviews.js";
 import productFeedbackRouter from "./routes/product-feedback.js";
+import { productUpload } from "./services/uploads.js";
 import referralRouter from "./routes/referral.js";
 import adminRouter from "./routes/admin.js";
 
@@ -135,7 +136,8 @@ app.use((req, res, next) => {
     req.path === "/api/auth/login" ||
     req.path === "/api/auth/register" ||
     req.path === "/api/auth/telegram/verify" ||
-    req.path === "/api/auth/logout"
+    req.path === "/api/auth/logout" ||
+    req.path === "/api/test-upload"
   ) {
     return next();
   }
@@ -151,6 +153,24 @@ app.get("/api/secure/ping", requireAuth, (_req, res) => res.json({ ok: true }));
 app.get("/api/admin/ping", requireAuth, requireAdmin, (_req, res) =>
   res.json({ ok: true, role: "ADMIN" })
 );
+
+// Test upload endpoint to validate file uploads independently of admin flows
+app.post("/api/test-upload", productUpload.single("image"), (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ error: "NO_FILE" });
+    console.log("[test-upload] file received", {
+      filename: req.file.filename,
+      mimetype: req.file.mimetype,
+      size: req.file.size,
+      path: req.file.path,
+    });
+    // Expose relative path under /uploads static mount
+    const relPath = ["products", req.file.filename].join("/");
+    res.json({ ok: true, file: { ...req.file, relPath, url: `/uploads/${relPath}` } });
+  } catch (e) {
+    res.status(500).json({ error: "TEST_UPLOAD_FAILED", message: e?.message || String(e) });
+  }
+});
 
 // Domain routers
 app.use("/api", collectionsRouter);
@@ -171,6 +191,8 @@ const PORT = parseInt(process.env.PORT, 10) || 4002;
 const HOST = process.env.HOST || "0.0.0.0";
 const server = app.listen(PORT, HOST, () => {
   console.log(`[server] listening on http://${HOST}:${PORT}`);
+  console.log(`[server] uploads dir: ${uploadRoot}`);
+  console.log(`[server] FRONTEND_ORIGIN: ${process.env.FRONTEND_ORIGIN || "<not set>"}`);
 });
 
 async function shutdown(signal) {
