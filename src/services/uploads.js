@@ -8,7 +8,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 // --- директории для загрузок ---
-const uploadRoot = path.resolve(__dirname, "../uploads");
+const uploadRoot = path.resolve(process.cwd(), "uploads");
 export const uploadProductsDir = path.join(uploadRoot, "products");
 export const uploadPaymentsDir = path.join(uploadRoot, "payments");
 export const uploadAvatarsDir = path.join(uploadRoot, "avatars");
