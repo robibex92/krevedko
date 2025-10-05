@@ -15,6 +15,7 @@ import {
 } from "../middleware/auth.js";
 import { sendVerificationEmail } from "../services/mailer.js";
 import { verifyTelegramLogin } from "../services/telegram.js";
+import { clearCache } from "../services/cache.js";
 
 const router = Router();
 
@@ -346,22 +347,108 @@ router.post("/telegram/link", requireAuth, async (req, res) => {
     const firstName = authData.first_name || null;
     const lastName = authData.last_name || null;
 
+    const meId = req.session.user.id;
     const existing = await prisma.user.findUnique({ where: { telegramId } });
-    if (existing && existing.id !== req.session.user.id) {
-      return res.status(409).json({ error: "TELEGRAM_ID_ALREADY_LINKED" });
+
+    // If another user already has this telegramId, merge that user into current user
+    if (existing && existing.id !== meId) {
+      const otherId = existing.id;
+      const merged = await prisma.$transaction(async (tx) => {
+        // 1) Move orders
+        await tx.order.updateMany({ where: { userId: otherId }, data: { userId: meId } });
+
+        // 2) Move cart items with upsert to avoid unique conflicts
+        const otherCart = await tx.cartItem.findMany({ where: { userId: otherId } });
+        for (const it of otherCart) {
+          await tx.cartItem.upsert({
+            where: { userId_collectionId_productId: { userId: meId, collectionId: it.collectionId, productId: it.productId } },
+            update: { quantityDecimal: it.quantityDecimal.toString(), unitPriceKopecks: it.unitPriceKopecks },
+            create: { userId: meId, collectionId: it.collectionId, productId: it.productId, quantityDecimal: it.quantityDecimal.toString(), unitPriceKopecks: it.unitPriceKopecks },
+          });
+        }
+        await tx.cartItem.deleteMany({ where: { userId: otherId } });
+
+        // 3) Move favorites with upsert to avoid duplicates
+        const otherFavs = await tx.favorite.findMany({ where: { userId: otherId } });
+        for (const f of otherFavs) {
+          await tx.favorite.upsert({
+            where: { userId_productId: { userId: meId, productId: f.productId } },
+            update: {},
+            create: { userId: meId, productId: f.productId },
+          });
+        }
+        await tx.favorite.deleteMany({ where: { userId: otherId } });
+
+        // 4) Reassign referrals (children of other -> me)
+        await tx.user.updateMany({ where: { referredBy: otherId }, data: { referredBy: meId } });
+
+        // 5) Merge loyalty points
+        const me = await tx.user.findUnique({ where: { id: meId }, select: { loyaltyPoints: true } });
+        const other = await tx.user.findUnique({ where: { id: otherId }, select: { loyaltyPoints: true } });
+        const mergedPoints = (me?.loyaltyPoints || 0) + (other?.loyaltyPoints || 0);
+
+        // 6) Update current user with telegram info and merged fields
+        const updateData = { telegramId, telegramUsername, telegramPhotoUrl, loyaltyPoints: mergedPoints };
+        if (!req.session.user.name && name) updateData.name = name;
+        if (!req.session.user.firstName && firstName) updateData.firstName = firstName;
+        if (!req.session.user.lastName && lastName) updateData.lastName = lastName;
+
+        const updatedMe = await tx.user.update({ where: { id: meId }, data: updateData });
+
+        // 7) Revoke/delete refresh tokens of the merged (other) user and delete other account
+        await tx.refreshToken.updateMany({ where: { userId: otherId, revokedAt: null }, data: { revokedAt: new Date() } });
+        await tx.user.delete({ where: { id: otherId } });
+
+        return updatedMe;
+      });
+
+      req.session.user = publicUser(merged);
+      try {
+        clearCache(`favorites:${meId}`);
+        clearCache(`favorites:${otherId}`);
+      } catch {}
+      return res.json({ user: publicUser(merged), merged: true });
     }
 
+    // Normal path: link telegram to current account
     const updateData = { telegramId, telegramUsername, telegramPhotoUrl };
     if (!req.session.user.name && name) updateData.name = name;
     if (!req.session.user.firstName && firstName) updateData.firstName = firstName;
     if (!req.session.user.lastName && lastName) updateData.lastName = lastName;
 
-    const user = await prisma.user.update({ where: { id: req.session.user.id }, data: updateData });
+    const user = await prisma.user.update({ where: { id: meId }, data: updateData });
     req.session.user = publicUser(user);
+    try { clearCache(`favorites:${meId}`); } catch {}
     res.json({ user: publicUser(user) });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "TELEGRAM_LINK_FAILED" });
+  }
+});
+
+router.post("/telegram/unlink", requireAuth, async (req, res) => {
+  const prisma = req.app.locals.prisma;
+  try {
+    const me = await prisma.user.findUnique({ where: { id: req.session.user.id } });
+    if (!me) return res.status(404).json({ error: "USER_NOT_FOUND" });
+
+    // Safety: prevent lockout. Allow unlink only if user can login by other means
+    const hasPassword = Boolean(me.passwordHash);
+    const hasVerifiedEmail = Boolean(me.email && me.emailVerifiedAt);
+    if (!hasPassword && !hasVerifiedEmail) {
+      return res.status(400).json({ error: "CANNOT_UNLINK_ONLY_AUTH_METHOD" });
+    }
+
+    const updated = await prisma.user.update({
+      where: { id: me.id },
+      data: { telegramId: null, telegramUsername: null, telegramPhotoUrl: null },
+    });
+    req.session.user = publicUser(updated);
+    try { clearCache(`favorites:${me.id}`); } catch {}
+    res.json({ user: publicUser(updated) });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "TELEGRAM_UNLINK_FAILED" });
   }
 });
 
