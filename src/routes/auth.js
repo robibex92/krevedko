@@ -303,7 +303,11 @@ router.post("/telegram/verify", async (req, res) => {
     if (!user) {
       user = await prisma.user.create({ data: { name, firstName, lastName, telegramId, telegramUsername, telegramPhotoUrl } });
     } else {
-      user = await prisma.user.update({ where: { id: user.id }, data: { name, firstName, lastName, telegramUsername, telegramPhotoUrl } });
+      const updateData = { telegramUsername, telegramPhotoUrl };
+      if (!user.name && name) updateData.name = name;
+      if (!user.firstName && firstName) updateData.firstName = firstName;
+      if (!user.lastName && lastName) updateData.lastName = lastName;
+      user = await prisma.user.update({ where: { id: user.id }, data: updateData });
     }
     req.session.user = publicUser(user);
     // Issue JWTs for Telegram login as well

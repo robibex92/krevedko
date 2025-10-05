@@ -100,18 +100,64 @@ router.patch("/profile", requireAuth, async (req, res) => {
   }
 });
 
-router.post("/profile/avatar", requireAuth, avatarUpload.single("avatar"), async (req, res) => {
-  const prisma = req.app.locals.prisma;
-  try {
-    if (!req.file) return res.status(400).json({ error: "NO_FILE" });
-    const relPath = ["avatars", req.file.filename].join("/");
-    const user = await prisma.user.update({ where: { id: req.session.user.id }, data: { avatarPath: relPath } });
-    req.session.user = publicUser(user);
-    res.json({ avatarPath: relPath });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "AVATAR_UPLOAD_FAILED" });
+// Enhanced avatar upload with detailed logging and multer error handling
+const avatarSingle = avatarUpload.single("avatar");
+router.post(
+  "/profile/avatar",
+  requireAuth,
+  (req, res, next) => {
+    try {
+      console.log("[upload/avatar] incoming", {
+        ip: req.ip,
+        contentType: req.headers["content-type"],
+        contentLength: req.headers["content-length"],
+        userId: req.session.user?.id,
+        uploadLimitMb: Number(process.env.UPLOAD_LIMIT_MB) || 5,
+      });
+    } catch {}
+    avatarSingle(req, res, (err) => {
+      if (err) {
+        const payload = {
+          code: err?.code,
+          message: err?.message,
+          name: err?.name,
+        };
+        console.error("[upload/avatar] multer error", payload);
+        if (err.code === "LIMIT_FILE_SIZE") {
+          const limitMb = Number(process.env.UPLOAD_LIMIT_MB) || 5;
+          return res.status(413).json({ error: "FILE_TOO_LARGE", limitMb });
+        }
+        return res.status(400).json({ error: "UPLOAD_FAILED", reason: err.message || String(err) });
+      }
+      return next();
+    });
+  },
+  async (req, res) => {
+    const prisma = req.app.locals.prisma;
+    try {
+      if (!req.file) {
+        console.warn("[upload/avatar] no file received after multer");
+        return res.status(400).json({ error: "NO_FILE" });
+      }
+      try {
+        console.log("[upload/avatar] saved", {
+          filename: req.file.filename,
+          size: req.file.size,
+          mimetype: req.file.mimetype,
+          destination: req.file.destination,
+          path: req.file.path,
+        });
+      } catch {}
+
+      const relPath = ["avatars", req.file.filename].join("/");
+      const user = await prisma.user.update({ where: { id: req.session.user.id }, data: { avatarPath: relPath } });
+      req.session.user = publicUser(user);
+      res.json({ avatarPath: relPath });
+    } catch (err) {
+      console.error("[upload/avatar] handler error", err);
+      res.status(500).json({ error: "AVATAR_UPLOAD_FAILED" });
+    }
   }
-});
+);
 
 export default router;
