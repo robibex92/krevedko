@@ -31,42 +31,14 @@ export async function getMailer() {
 export async function sendVerificationEmail(email, token) {
   const mailer = await getMailer();
 
-  // Всегда используем APP_BASE_URL + /api/auth/verify
-  const verifyUrl = `${APP_BASE_URL}/api/auth/verify?token=${encodeURIComponent(
+  const appBase = (APP_BASE_URL || "").trim().replace(/\/$/, "");
+  const configuredBase = (VERIFY_LINK_BASE || "").trim().replace(/\/$/, "");
+  const fallbackBase = `${appBase || ""}/api-v3/verifyl`;
+  const base = configuredBase || fallbackBase;
+
+  const verifyUrl = `${base}?token=${encodeURIComponent(
     token
   )}&email=${encodeURIComponent(email)}`;
-
-  console.log(`Verification URL: ${verifyUrl}`); // Для отладки
-
-  const html = `
-    <p>Здравствуйте!</p>
-    <p>Подтвердите ваш email, перейдя по ссылке ниже. Ссылка действует 24 часа.</p>
-    <p><a href="${verifyUrl}">Подтвердить email</a></p>
-    <p>Если вы не регистрировались, просто проигнорируйте письмо.</p>
-  `;
-  const text = `Подтвердите email: ${verifyUrl}\nСсылка действует 24 часа.`;
-
-  await mailer.sendMail({
-    from: EMAIL_FROM,
-    to: email,
-    subject: "Подтверждение email",
-    html,
-    text,
-  });
-}
-
-export async function sendVerificationEmail(email, token) {
-  const mailer = await getMailer();
-
-  // Build verify URL:
-  const base = (VERIFY_LINK_BASE || "").trim();
-  const verifyUrl = base
-    ? `${base}?token=${encodeURIComponent(token)}&email=${encodeURIComponent(
-        email
-      )}`
-    : `${APP_BASE_URL}/api/auth/verify?token=${encodeURIComponent(
-        token
-      )}&email=${encodeURIComponent(email)}`;
 
   console.log(`Verification URL: ${verifyUrl}`); // Для отладки
 
