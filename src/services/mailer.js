@@ -35,18 +35,19 @@ export async function sendEmail({ to, subject, html, text }) {
 
 export async function sendVerificationEmail(email, token) {
   const mailer = await getMailer();
+
   // Build verify URL:
-  // - If VERIFY_LINK_BASE is set (absolute URL without query), use it directly and append token/email
-  //   e.g. https://api.asicredinvest.md/api-v3/api/auth/verify
-  // - Else fallback to frontend page which will call /api/auth/verify
   const base = (VERIFY_LINK_BASE || "").trim();
   const verifyUrl = base
     ? `${base}?token=${encodeURIComponent(token)}&email=${encodeURIComponent(
         email
       )}`
-    : `${APP_BASE_URL}?token=${encodeURIComponent(
+    : `${APP_BASE_URL}/api/auth/verify?token=${encodeURIComponent(
         token
       )}&email=${encodeURIComponent(email)}`;
+
+  console.log(`Verification URL: ${verifyUrl}`); // Для отладки
+
   const html = `
     <p>Здравствуйте!</p>
     <p>Подтвердите ваш email, перейдя по ссылке ниже. Ссылка действует 24 часа.</p>
@@ -54,6 +55,7 @@ export async function sendVerificationEmail(email, token) {
     <p>Если вы не регистрировались, просто проигнорируйте письмо.</p>
   `;
   const text = `Подтвердите email: ${verifyUrl}\nСсылка действует 24 часа.`;
+
   await mailer.sendMail({
     from: EMAIL_FROM,
     to: email,
