@@ -29,8 +29,9 @@ export async function getMailer() {
 export async function sendVerificationEmail(email, token) {
   const mailer = await getMailer();
 
-  // Всегда используем APP_BASE_URL + /verify-email
-  const verifyUrl = `${APP_BASE_URL}/verify-email?token=${encodeURIComponent(token)}&email=${encodeURIComponent(email)}`;
+  // Используем фронтенд URL вместо бэкенда
+  const FRONTEND_URL = process.env.FRONTEND_ORIGIN ;
+  const verifyUrl = `${FRONTEND_URL}/verify-email?token=${encodeURIComponent(token)}&email=${encodeURIComponent(email)}`;
 
   console.log(`=== Verification URL: ${verifyUrl} ===`);
 
