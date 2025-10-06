@@ -28,9 +28,31 @@ export async function getMailer() {
   };
 }
 
-export async function sendEmail({ to, subject, html, text }) {
+export async function sendVerificationEmail(email, token) {
   const mailer = await getMailer();
-  return mailer.sendMail({ from: EMAIL_FROM, to, subject, html, text });
+
+  // Всегда используем APP_BASE_URL + /api/auth/verify
+  const verifyUrl = `${APP_BASE_URL}/api/auth/verify?token=${encodeURIComponent(
+    token
+  )}&email=${encodeURIComponent(email)}`;
+
+  console.log(`Verification URL: ${verifyUrl}`); // Для отладки
+
+  const html = `
+    <p>Здравствуйте!</p>
+    <p>Подтвердите ваш email, перейдя по ссылке ниже. Ссылка действует 24 часа.</p>
+    <p><a href="${verifyUrl}">Подтвердить email</a></p>
+    <p>Если вы не регистрировались, просто проигнорируйте письмо.</p>
+  `;
+  const text = `Подтвердите email: ${verifyUrl}\nСсылка действует 24 часа.`;
+
+  await mailer.sendMail({
+    from: EMAIL_FROM,
+    to: email,
+    subject: "Подтверждение email",
+    html,
+    text,
+  });
 }
 
 export async function sendVerificationEmail(email, token) {
