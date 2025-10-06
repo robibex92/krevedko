@@ -44,7 +44,7 @@ export async function sendVerificationEmail(email, token) {
     ? `${base}?token=${encodeURIComponent(token)}&email=${encodeURIComponent(
         email
       )}`
-    : `${APP_BASE_URL}/verify-email?token=${encodeURIComponent(
+    : `${APP_BASE_URL}?token=${encodeURIComponent(
         token
       )}&email=${encodeURIComponent(email)}`;
   const html = `
