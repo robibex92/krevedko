@@ -15,6 +15,7 @@ router.get("/profile/me", requireAuth, async (req, res) => {
         select: {
           id: true,
           email: true,
+          emailVerifiedAt: true,
           name: true,
           firstName: true,
           lastName: true,
@@ -54,7 +55,16 @@ router.get("/profile/me", requireAuth, async (req, res) => {
       cancelled: mappedOrders.filter((o) => o.status === "CANCELLED"),
     };
 
-    res.json({ user, orders: orderGroups, summary: { total: mappedOrders.length, active: orderGroups.active.length, completed: orderGroups.completed.length, cancelled: orderGroups.cancelled.length } });
+    res.json({
+      user,
+      orders: orderGroups,
+      summary: {
+        total: mappedOrders.length,
+        active: orderGroups.active.length,
+        completed: orderGroups.completed.length,
+        cancelled: orderGroups.cancelled.length,
+      },
+    });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "PROFILE_FETCH_FAILED" });
@@ -64,18 +74,32 @@ router.get("/profile/me", requireAuth, async (req, res) => {
 router.patch("/profile", requireAuth, async (req, res) => {
   const prisma = req.app.locals.prisma;
   try {
-    const { firstName, lastName, phone, addressStreet, addressHouse, addressApartment } = req.body || {};
+    const {
+      firstName,
+      lastName,
+      phone,
+      addressStreet,
+      addressHouse,
+      addressApartment,
+    } = req.body || {};
     const data = {};
-    const normalize = (value) => (value === undefined ? undefined : String(value).trim() || null);
+    const normalize = (value) =>
+      value === undefined ? undefined : String(value).trim() || null;
 
     if (firstName !== undefined) data.firstName = normalize(firstName);
     if (lastName !== undefined) data.lastName = normalize(lastName);
     if (phone !== undefined) data.phone = normalize(phone);
-    if (addressStreet !== undefined) data.addressStreet = normalize(addressStreet);
+    if (addressStreet !== undefined)
+      data.addressStreet = normalize(addressStreet);
     if (addressHouse !== undefined) data.addressHouse = normalize(addressHouse);
-    if (addressApartment !== undefined) data.addressApartment = normalize(addressApartment);
+    if (addressApartment !== undefined)
+      data.addressApartment = normalize(addressApartment);
 
-    if (data.firstName !== undefined || data.lastName !== undefined || req.body?.name !== undefined) {
+    if (
+      data.firstName !== undefined ||
+      data.lastName !== undefined ||
+      req.body?.name !== undefined
+    ) {
       const explicitName = normalize(req.body?.name);
       if (explicitName !== undefined) {
         data.name = explicitName;
@@ -89,9 +113,13 @@ router.patch("/profile", requireAuth, async (req, res) => {
       }
     }
 
-    if (Object.keys(data).length === 0) return res.status(400).json({ error: "NO_PROFILE_UPDATES" });
+    if (Object.keys(data).length === 0)
+      return res.status(400).json({ error: "NO_PROFILE_UPDATES" });
 
-    const user = await prisma.user.update({ where: { id: req.session.user.id }, data });
+    const user = await prisma.user.update({
+      where: { id: req.session.user.id },
+      data,
+    });
     req.session.user = publicUser(user);
     res.json({ user: publicUser(user) });
   } catch (err) {
@@ -127,7 +155,9 @@ router.post(
           const limitMb = Number(process.env.UPLOAD_LIMIT_MB) || 5;
           return res.status(413).json({ error: "FILE_TOO_LARGE", limitMb });
         }
-        return res.status(400).json({ error: "UPLOAD_FAILED", reason: err.message || String(err) });
+        return res
+          .status(400)
+          .json({ error: "UPLOAD_FAILED", reason: err.message || String(err) });
       }
       return next();
     });
@@ -150,7 +180,10 @@ router.post(
       } catch {}
 
       const relPath = ["avatars", req.file.filename].join("/");
-      const user = await prisma.user.update({ where: { id: req.session.user.id }, data: { avatarPath: relPath } });
+      const user = await prisma.user.update({
+        where: { id: req.session.user.id },
+        data: { avatarPath: relPath },
+      });
       req.session.user = publicUser(user);
       res.json({ avatarPath: relPath });
     } catch (err) {
