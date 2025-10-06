@@ -7,7 +7,6 @@ const {
   SMTP_PASS,
   EMAIL_FROM = "no-reply@example.com",
   APP_BASE_URL = "http://localhost:5173",
-  VERIFY_LINK_BASE = "",
 } = process.env;
 
 export async function getMailer() {
@@ -27,20 +26,13 @@ export async function getMailer() {
     },
   };
 }
-
 export async function sendVerificationEmail(email, token) {
   const mailer = await getMailer();
 
-  const appBase = (APP_BASE_URL || "").trim().replace(/\/$/, "");
-  const configuredBase = (VERIFY_LINK_BASE || "").trim().replace(/\/$/, "");
-  const fallbackBase = `${appBase || ""}/api-v3/verifyl`;
-  const base = configuredBase || fallbackBase;
+  // Всегда используем APP_BASE_URL + /verify-email
+  const verifyUrl = `${APP_BASE_URL}/verify-email?token=${encodeURIComponent(token)}&email=${encodeURIComponent(email)}`;
 
-  const verifyUrl = `${base}?token=${encodeURIComponent(
-    token
-  )}&email=${encodeURIComponent(email)}`;
-
-  console.log(`Verification URL: ${verifyUrl}`); // Для отладки
+  console.log(`=== Verification URL: ${verifyUrl} ===`);
 
   const html = `
     <p>Здравствуйте!</p>
