@@ -593,11 +593,16 @@ router.get("/admin/analytics", requireAuth, requireAdmin, async (req, res) => {
   const prisma = req.app.locals.prisma;
   try {
     const { days = 7 } = req.query;
+    console.log(`[analytics] Fetching analytics for ${days} days`);
     const analytics = await getAnalyticsData(prisma, Number(days));
+    console.log(`[analytics] Successfully fetched analytics data`);
     res.json(analytics);
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "ANALYTICS_FETCH_FAILED" });
+    console.error("[analytics] Error fetching analytics:", err);
+    res.status(500).json({
+      error: "ANALYTICS_FETCH_FAILED",
+      message: err.message || "Unknown error",
+    });
   }
 });
 

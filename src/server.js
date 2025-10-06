@@ -63,20 +63,24 @@ fs.mkdirSync(sessionDir, { recursive: true });
 // Core middlewares
 app.set("trust proxy", 1);
 
-
 app.use(morgan("dev"));
 app.use(compression());
 
 // Middleware
 app.use(express.json({ limit: "50mb" }));
-app.use(cors({
-  origin: process.env.FRONTEND_ORIGIN,   // https://test.sibroot.ru
-  credentials: true,
-}));
-app.options('*', cors({
-  origin: process.env.FRONTEND_ORIGIN,
-  credentials: true,
-}));
+app.use(
+  cors({
+    origin: process.env.FRONTEND_ORIGIN, // https://test.sibroot.ru
+    credentials: true,
+  })
+);
+app.options(
+  "*",
+  cors({
+    origin: process.env.FRONTEND_ORIGIN,
+    credentials: true,
+  })
+);
 app.use(cookieParser());
 app.use(express.urlencoded({ limit: "50mb", extended: true }));
 app.use(
@@ -104,7 +108,7 @@ app.use(
       httpOnly: true,
       sameSite: NODE_ENV === "production" ? "none" : "lax",
       secure: NODE_ENV === "production",
-      maxAge: 1000 * 60 * 60 * 24 * 7,
+      maxAge: 1000 * 60 * 60 * 24 * 30, // 30 дней
     },
   })
 );
@@ -166,9 +170,14 @@ app.post("/api/test-upload", productUpload.single("image"), (req, res) => {
     });
     // Expose relative path under /uploads static mount
     const relPath = ["products", req.file.filename].join("/");
-    res.json({ ok: true, file: { ...req.file, relPath, url: `/uploads/${relPath}` } });
+    res.json({
+      ok: true,
+      file: { ...req.file, relPath, url: `/uploads/${relPath}` },
+    });
   } catch (e) {
-    res.status(500).json({ error: "TEST_UPLOAD_FAILED", message: e?.message || String(e) });
+    res
+      .status(500)
+      .json({ error: "TEST_UPLOAD_FAILED", message: e?.message || String(e) });
   }
 });
 
@@ -192,7 +201,9 @@ const HOST = process.env.HOST || "0.0.0.0";
 const server = app.listen(PORT, HOST, () => {
   console.log(`[server] listening on http://${HOST}:${PORT}`);
   console.log(`[server] uploads dir: ${uploadRoot}`);
-  console.log(`[server] FRONTEND_ORIGIN: ${process.env.FRONTEND_ORIGIN || "<not set>"}`);
+  console.log(
+    `[server] FRONTEND_ORIGIN: ${process.env.FRONTEND_ORIGIN || "<not set>"}`
+  );
 });
 
 async function shutdown(signal) {

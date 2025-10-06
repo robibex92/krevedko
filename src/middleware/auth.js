@@ -4,11 +4,14 @@ import jwt from "jsonwebtoken";
 const {
   JWT_ACCESS_SECRET = "dev_access_secret_change_me",
   JWT_REFRESH_SECRET = "dev_refresh_secret_change_me",
-  JWT_ACCESS_TTL = "15m",
+  JWT_ACCESS_TTL = "24h",
   JWT_REFRESH_TTL = "30d",
   NODE_ENV = "development",
 } = process.env;
-const COOKIE_BASE_PATH = (process.env.COOKIE_BASE_PATH || "").replace(/\/$/, ""); // e.g. "/api-v3"
+const COOKIE_BASE_PATH = (process.env.COOKIE_BASE_PATH || "").replace(
+  /\/$/,
+  ""
+); // e.g. "/api-v3"
 const REFRESH_COOKIE_PATH = `${COOKIE_BASE_PATH}/api/auth` || "/api/auth";
 
 function resolveUserId(sub) {
@@ -89,7 +92,9 @@ export function signAccessToken(user) {
 export function signRefreshToken(user) {
   const jti = randomToken(16);
   const payload = { sub: user.id, type: "refresh", jti };
-  const token = jwt.sign(payload, JWT_REFRESH_SECRET, { expiresIn: JWT_REFRESH_TTL });
+  const token = jwt.sign(payload, JWT_REFRESH_SECRET, {
+    expiresIn: JWT_REFRESH_TTL,
+  });
   const decoded = jwt.decode(token);
   const exp = decoded?.exp || null; // seconds since epoch
   return { token, jti, exp };
