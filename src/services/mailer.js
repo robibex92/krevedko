@@ -29,8 +29,7 @@ export async function getMailer() {
 export async function sendVerificationEmail(email, token) {
   const mailer = await getMailer();
 
-  const base = (APP_BASE_URL || "").trim().replace(/\/$/, "");
-  const verifyUrl = `${base}/api/verify-email?token=${encodeURIComponent(
+  const verifyUrl = `${APP_BASE_URL}/api/verify-email?token=${encodeURIComponent(
     token
   )}&email=${encodeURIComponent(email)}`;
 
