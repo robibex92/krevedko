@@ -13,6 +13,7 @@ import {
   clearRefreshCookie,
   resolveUserId,
 } from "../middleware/auth.js";
+import { clearVerificationState } from "../services/verify-email.js";
 import { sendVerificationEmail } from "../services/mailer.js";
 import { verifyTelegramLogin } from "../services/telegram.js";
 import { clearCache } from "../services/cache.js";

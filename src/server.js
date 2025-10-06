@@ -28,6 +28,7 @@ import productFeedbackRouter from "./routes/product-feedback.js";
 import { productUpload } from "./services/uploads.js";
 import referralRouter from "./routes/referral.js";
 import adminRouter from "./routes/admin.js";
+import verifyEmailRouter from "./routes/verify-email.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -150,6 +151,7 @@ app.use((req, res, next) => {
 
 // Public and auth routers
 app.use("/api", publicRouter);
+app.use("/api", verifyEmailRouter);
 app.use("/api/auth", authRouter);
 
 // Example secured pings
@@ -192,28 +194,14 @@ app.use("/api", productFeedbackRouter);
 app.use("/api", referralRouter);
 app.use("/api", adminRouter);
 
-
-app.get("/verify-email", (req, res) => {
-  const { token, email } = req.query;
-  
-  // Редирект на фронтенд с теми же параметрами
-  const frontendUrl = process.env.FRONTEND_ORIGIN;
-  const redirectUrl = `${frontendUrl}/verify-email?token=${encodeURIComponent(token)}&email=${encodeURIComponent(email)}`;
-  
-  res.redirect(redirectUrl);
-});
 // Centralized error handler
 app.use(errorHandler);
 
 // Start server + graceful shutdown (env PORT)
-const PORT = parseInt(process.env.PORT, 10) || 4002;
+const PORT = process.env.PORT || 4002;
 const HOST = process.env.HOST || "0.0.0.0";
 const server = app.listen(PORT, HOST, () => {
-  console.log(`[server] listening on http://${HOST}:${PORT}`);
-  console.log(`[server] uploads dir: ${uploadRoot}`);
-  console.log(
-    `[server] FRONTEND_ORIGIN: ${process.env.FRONTEND_ORIGIN || "<not set>"}`
-  );
+  console.log(`[server] started on ${PORT}`);
 });
 
 async function shutdown(signal) {
