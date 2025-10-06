@@ -192,6 +192,16 @@ app.use("/api", productFeedbackRouter);
 app.use("/api", referralRouter);
 app.use("/api", adminRouter);
 
+
+app.get("/verify-email", (req, res) => {
+  const { token, email } = req.query;
+  
+  // Редирект на фронтенд с теми же параметрами
+  const frontendUrl = process.env.FRONTEND_ORIGIN;
+  const redirectUrl = `${frontendUrl}/verify-email?token=${encodeURIComponent(token)}&email=${encodeURIComponent(email)}`;
+  
+  res.redirect(redirectUrl);
+});
 // Centralized error handler
 app.use(errorHandler);
 
