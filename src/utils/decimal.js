@@ -24,7 +24,10 @@ export function isMultipleOf(value, step) {
   if (s.lte(0)) return false;
   // v / step should be integer
   const q = a.div(s);
-  return q.isInteger();
+  if (q.isInteger()) return true;
+  // tolerate tiny precision artifacts (e.g. 1.0000000000000001)
+  const diff = q.minus(q.round()).abs();
+  return diff.lte(new Decimal("1e-9"));
 }
 
 /**

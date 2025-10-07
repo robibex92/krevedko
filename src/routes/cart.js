@@ -51,7 +51,10 @@ router.get("/cart", requireAuth, async (req, res) => {
 
         const qStr = it.quantityDecimal.toString();
         const unitPrice = override?.priceOverrideKopecks ?? it.unitPriceKopecks;
-        const sub = dec(unitPrice).mul(dec(qStr));
+        const stepValue = override?.stepOverrideDecimal ?? product.stepDecimal;
+        const stepStr = stepValue ? stepValue.toString() : "1";
+        const stepsCount = dec(qStr).div(dec(stepStr));
+        const sub = dec(unitPrice).mul(stepsCount);
         if (isAvailable) {
           total = total.add(sub);
           grandTotal = grandTotal.add(sub);
@@ -71,6 +74,8 @@ router.get("/cart", requireAuth, async (req, res) => {
           collectionId: col.id,
           isAvailable,
           displayStockHint: displayHint || null,
+          category: product.category || null,
+          stepDecimal: stepStr,
         });
       }
 
@@ -116,7 +121,8 @@ router.post("/cart/items", requireAuth, async (req, res) => {
     if (!isMultipleOf(quantityStr, stepStr)) {
       return res.status(400).json({ error: "QUANTITY_NOT_MULTIPLE_OF_STEP", step: stepStr });
     }
-    const subtotal = dec(resolved.price).mul(dec(quantityStr));
+    const steps = dec(quantityStr).div(dec(stepStr));
+    const subtotal = dec(resolved.price).mul(steps);
     if (!subtotal.mod(1).eq(0)) return res.status(400).json({ error: "PRICE_STEP_MISMATCH" });
 
     const item = await prisma.cartItem.upsert({

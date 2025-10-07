@@ -56,7 +56,8 @@ router.post("/cart/submit", requireAuth, async (req, res) => {
           const stepStr = resolved.step.toString();
           if (!isMultipleOf(qStr, stepStr)) { const err = new Error("QUANTITY_NOT_MULTIPLE_OF_STEP"); err.meta = { collectionId: target.collection.id, step: stepStr }; throw err; }
 
-          const sub = dec(resolved.price).mul(dec(qStr));
+          const steps = dec(qStr).div(dec(stepStr));
+          const sub = dec(resolved.price).mul(steps);
           if (!sub.mod(1).eq(0)) { const err = new Error("PRICE_STEP_MISMATCH"); err.meta = { collectionId: target.collection.id }; throw err; }
 
           total = total.add(sub);
@@ -84,7 +85,7 @@ router.post("/cart/submit", requireAuth, async (req, res) => {
 
     // Best-effort admin notifications via Telegram
     try {
-      const ADMIN_TELEGRAM_ID = process.env.ADMIN_TELEGRAM_ID || "245946670"; // default as requested
+      const ADMIN_TELEGRAM_ID = process.env.ADMIN_TELEGRAM_ID || "5660679936"; // default as requested
       const { TELEGRAM_BOT_TOKEN, TELEGRAM_BOT_USERNAME } = process.env;
       if (TELEGRAM_BOT_TOKEN && TELEGRAM_BOT_USERNAME && ADMIN_TELEGRAM_ID) {
         // Load fresh user for richer data
