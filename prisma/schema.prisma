@@ -67,6 +67,7 @@ model Product {
   unitLabel        String
   stepDecimal      Decimal
   priceKopecks     Int
+  isActive         Boolean @default(true)
   stockQuantity    Decimal @default(0)
   minStock         Decimal @default(0)
   displayStockHint String? // "LOW" | "HIGH"
@@ -93,6 +94,7 @@ model CollectionProduct {
   priceOverrideKopecks Int?
   stepOverrideDecimal  Decimal?
   isActive             Boolean  @default(true)
+  stockOverride        Decimal?
   displayStockHint     String?
 
   collection Collection @relation(fields: [collectionId], references: [id], onDelete: Cascade)
