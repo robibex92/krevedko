@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { requireAuth, requireAdmin } from "../middleware/auth.js";
-import { productUpload, paymentUpload } from "../services/uploads.js";
+import { productUpload, paymentUpload, recipesUpload } from "../services/uploads.js";
 import { clearCache } from "../services/cache.js";
 import { makeOrderNumber } from "../services/pricing.js";
 import {
@@ -8,6 +8,13 @@ import {
   sendTelegramMessage,
 } from "../services/telegram.js";
 import { getAnalyticsData } from "../services/analytics.js";
+import {
+  ensureRecipeSlug,
+  normalizeRecipeContent,
+  recipeAuthorInclude,
+  toRecipeDetail,
+  toRecipeSummary,
+} from "../utils/recipes.js";
 
 const router = Router();
 
@@ -35,6 +42,211 @@ router.post(
     } catch (err) {
       console.error(err);
       res.status(500).json({ error: "COLLECTION_CREATE_FAILED" });
+    }
+  }
+);
+
+router.get(
+  "/admin/recipes",
+  requireAuth,
+  requireAdmin,
+  async (req, res) => {
+    const prisma = req.app.locals.prisma;
+    try {
+      const recipes = await prisma.recipe.findMany({
+        include: recipeAuthorInclude,
+        orderBy: { createdAt: "desc" },
+      });
+      res.json({ recipes: recipes.map((recipe) => toRecipeSummary(recipe)) });
+    } catch (error) {
+      console.error(error);
+      res.status(500).json({ error: "ADMIN_RECIPES_FETCH_FAILED" });
+    }
+  }
+);
+
+router.get(
+  "/admin/recipes/:id",
+  requireAuth,
+  requireAdmin,
+  async (req, res) => {
+    const prisma = req.app.locals.prisma;
+    try {
+      const id = Number(req.params.id);
+      if (!Number.isInteger(id)) {
+        return res.status(400).json({ error: "INVALID_ID" });
+      }
+      const recipe = await prisma.recipe.findUnique({
+        where: { id },
+        include: recipeAuthorInclude,
+      });
+      if (!recipe) return res.status(404).json({ error: "RECIPE_NOT_FOUND" });
+      res.json({ recipe: toRecipeDetail(recipe) });
+    } catch (error) {
+      console.error(error);
+      res.status(500).json({ error: "ADMIN_RECIPE_FETCH_FAILED" });
+    }
+  }
+);
+
+router.post(
+  "/admin/recipes",
+  requireAuth,
+  requireAdmin,
+  async (req, res) => {
+    const prisma = req.app.locals.prisma;
+    try {
+      const {
+        title,
+        content,
+        status,
+        excerpt,
+        coverImagePath,
+        publish,
+        slug,
+      } = req.body || {};
+      if (!title) return res.status(400).json({ error: "TITLE_REQUIRED" });
+      if (status && !["DRAFT", "PUBLISHED"].includes(status)) {
+        return res.status(400).json({ error: "INVALID_STATUS" });
+      }
+      const normalizedContent = normalizeRecipeContent(content);
+      const now = new Date();
+      const effectiveStatus = publish ? "PUBLISHED" : status || "DRAFT";
+      const authorId = req.session.user.id;
+      const finalSlug = await ensureRecipeSlug(prisma, slug || title);
+      const created = await prisma.recipe.create({
+        data: {
+          title,
+          content: normalizedContent,
+          status: effectiveStatus,
+          excerpt: excerpt ?? null,
+          coverImagePath: coverImagePath ?? null,
+          publishedAt: effectiveStatus === "PUBLISHED" ? now : null,
+          authorId,
+          slug: finalSlug,
+        },
+        include: recipeAuthorInclude,
+      });
+      res.status(201).json({ recipe: toRecipeDetail(created) });
+    } catch (error) {
+      console.error(error);
+      const message = error?.message || "ADMIN_RECIPE_CREATE_FAILED";
+      res.status(500).json({ error: "ADMIN_RECIPE_CREATE_FAILED", message });
+    }
+  }
+);
+
+router.patch(
+  "/admin/recipes/:id",
+  requireAuth,
+  requireAdmin,
+  async (req, res) => {
+    const prisma = req.app.locals.prisma;
+    try {
+      const id = Number(req.params.id);
+      if (!Number.isInteger(id)) {
+        return res.status(400).json({ error: "INVALID_ID" });
+      }
+      const existing = await prisma.recipe.findUnique({ where: { id } });
+      if (!existing) return res.status(404).json({ error: "RECIPE_NOT_FOUND" });
+
+      const {
+        title,
+        content,
+        status,
+        excerpt,
+        coverImagePath,
+        publish,
+        slug,
+      } = req.body || {};
+
+      if (status && !["DRAFT", "PUBLISHED"].includes(status)) {
+        return res.status(400).json({ error: "INVALID_STATUS" });
+      }
+
+      const data = {};
+      if (title !== undefined) data.title = title;
+      if (excerpt !== undefined) data.excerpt = excerpt ?? null;
+      if (coverImagePath !== undefined)
+        data.coverImagePath = coverImagePath ?? null;
+      if (content !== undefined)
+        data.content = normalizeRecipeContent(content);
+
+      let nextStatus = existing.status;
+      if (publish === true) {
+        nextStatus = "PUBLISHED";
+      } else if (status !== undefined) {
+        nextStatus = status;
+      }
+      data.status = nextStatus;
+      if (nextStatus === "PUBLISHED" && !existing.publishedAt) {
+        data.publishedAt = new Date();
+      } else if (nextStatus !== "PUBLISHED") {
+        data.publishedAt = null;
+      }
+
+      if (slug !== undefined) {
+        data.slug = await ensureRecipeSlug(prisma, slug || title || existing.title, id);
+      }
+
+      const updated = await prisma.recipe.update({
+        where: { id },
+        data,
+        include: recipeAuthorInclude,
+      });
+      res.json({ recipe: toRecipeDetail(updated) });
+    } catch (error) {
+      console.error(error);
+      const message = error?.message || "ADMIN_RECIPE_UPDATE_FAILED";
+      res.status(500).json({ error: "ADMIN_RECIPE_UPDATE_FAILED", message });
+    }
+  }
+);
+
+router.delete(
+  "/admin/recipes/:id",
+  requireAuth,
+  requireAdmin,
+  async (req, res) => {
+    const prisma = req.app.locals.prisma;
+    try {
+      const id = Number(req.params.id);
+      if (!Number.isInteger(id)) {
+        return res.status(400).json({ error: "INVALID_ID" });
+      }
+      await prisma.recipe.delete({ where: { id } });
+      res.json({ ok: true });
+    } catch (error) {
+      console.error(error);
+      res.status(500).json({ error: "ADMIN_RECIPE_DELETE_FAILED" });
+    }
+  }
+);
+
+router.post(
+  "/admin/recipes/upload",
+  requireAuth,
+  requireAdmin,
+  recipesUpload.array("media", 10),
+  async (req, res) => {
+    try {
+      if (!req.files || !req.files.length) {
+        return res.status(400).json({ error: "NO_FILES" });
+      }
+      const result = req.files.map((file) => {
+        const relPath = ["recipes", file.filename].join("/");
+        return {
+          filename: file.filename,
+          mimetype: file.mimetype,
+          size: file.size,
+          path: relPath,
+          url: `/uploads/${relPath}`,
+        };
+      });
+      res.json({ files: result });
+    } catch (error) {
+      console.error(error);
+      res.status(500).json({ error: "ADMIN_RECIPE_UPLOAD_FAILED" });
     }
   }
 );

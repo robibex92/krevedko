@@ -39,6 +39,7 @@ model User {
   referrer      User?      @relation("UserReferrals", fields: [referredBy], references: [id])
   publicReviews PublicReview[]
   refreshTokens RefreshToken[]
+  recipes       Recipe[]
 }
 
 model Collection {
@@ -203,19 +204,20 @@ model Favorite {
   @@unique([userId, productId])
 }
 
-model Review {
-  id        Int      @id @default(autoincrement())
-  userId    Int
-  productId Int
-  rating    Int      // 1-5 stars
-  comment   String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+model Recipe {
+  id             Int      @id @default(autoincrement())
+  slug           String   @unique
+  title          String
+  excerpt        String?
+  coverImagePath String?
+  content        Json
+  status         String   @default("DRAFT")
+  publishedAt    DateTime?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  authorId       Int
 
-  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
-  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
-
-  @@unique([userId, productId])
+  author User @relation(fields: [authorId], references: [id], onDelete: Restrict)
 }
 
 model Comment {
