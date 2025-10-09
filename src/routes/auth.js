@@ -302,12 +302,26 @@ router.post("/telegram/verify", async (req, res) => {
 
     let user = await prisma.user.findUnique({ where: { telegramId } });
     if (!user) {
-      user = await prisma.user.create({ data: { name, firstName, lastName, telegramId, telegramUsername, telegramPhotoUrl } });
+      user = await prisma.user.create({
+        data: {
+          name,
+          firstName,
+          lastName,
+          telegramId,
+          telegramUsername,
+          telegramPhotoUrl,
+          avatarPath: null,
+        },
+      });
     } else {
       const updateData = { telegramUsername, telegramPhotoUrl };
       if (!user.name && name) updateData.name = name;
       if (!user.firstName && firstName) updateData.firstName = firstName;
       if (!user.lastName && lastName) updateData.lastName = lastName;
+      // Если у пользователя нет кастомного аватара, но есть телеграм-картинка, используем её как заглушку
+      if (!user.avatarPath && telegramPhotoUrl) {
+        updateData.avatarPath = null;
+      }
       user = await prisma.user.update({ where: { id: user.id }, data: updateData });
     }
     req.session.user = publicUser(user);
@@ -356,9 +370,24 @@ router.post("/telegram/link", requireAuth, async (req, res) => {
     const existing = await prisma.user.findUnique({ where: { telegramId } });
 
     // If another user already has this telegramId, merge that user into current user
+    let resolvedExisting = existing;
+
     if (existing && existing.id !== meId) {
       const otherId = existing.id;
       const merged = await prisma.$transaction(async (tx) => {
+        const [meAccount, otherAccount] = await Promise.all([
+          tx.user.findUnique({
+            where: { id: meId },
+          }),
+          tx.user.findUnique({
+            where: { id: otherId },
+          }),
+        ]);
+
+        if (!otherAccount) {
+          throw new Error("TELEGRAM_ACCOUNT_NOT_FOUND");
+        }
+
         // 1) Move orders
         await tx.order.updateMany({ where: { userId: otherId }, data: { userId: meId } });
 
@@ -366,9 +395,24 @@ router.post("/telegram/link", requireAuth, async (req, res) => {
         const otherCart = await tx.cartItem.findMany({ where: { userId: otherId } });
         for (const it of otherCart) {
           await tx.cartItem.upsert({
-            where: { userId_collectionId_productId: { userId: meId, collectionId: it.collectionId, productId: it.productId } },
-            update: { quantityDecimal: it.quantityDecimal.toString(), unitPriceKopecks: it.unitPriceKopecks },
-            create: { userId: meId, collectionId: it.collectionId, productId: it.productId, quantityDecimal: it.quantityDecimal.toString(), unitPriceKopecks: it.unitPriceKopecks },
+            where: {
+              userId_collectionId_productId: {
+                userId: meId,
+                collectionId: it.collectionId,
+                productId: it.productId,
+              },
+            },
+            update: {
+              quantityDecimal: it.quantityDecimal.toString(),
+              unitPriceKopecks: it.unitPriceKopecks,
+            },
+            create: {
+              userId: meId,
+              collectionId: it.collectionId,
+              productId: it.productId,
+              quantityDecimal: it.quantityDecimal.toString(),
+              unitPriceKopecks: it.unitPriceKopecks,
+            },
           });
         }
         await tx.cartItem.deleteMany({ where: { userId: otherId } });
@@ -388,25 +432,53 @@ router.post("/telegram/link", requireAuth, async (req, res) => {
         await tx.user.updateMany({ where: { referredBy: otherId }, data: { referredBy: meId } });
 
         // 5) Merge loyalty points
-        const me = await tx.user.findUnique({ where: { id: meId }, select: { loyaltyPoints: true } });
-        const other = await tx.user.findUnique({ where: { id: otherId }, select: { loyaltyPoints: true } });
-        const mergedPoints = (me?.loyaltyPoints || 0) + (other?.loyaltyPoints || 0);
+        const mergedPoints = (meAccount?.loyaltyPoints || 0) + (otherAccount?.loyaltyPoints || 0);
 
-        // 6) Update current user with telegram info and merged fields
-        const updateData = { telegramId, telegramUsername, telegramPhotoUrl, loyaltyPoints: mergedPoints };
-        if (!req.session.user.name && name) updateData.name = name;
-        if (!req.session.user.firstName && firstName) updateData.firstName = firstName;
-        if (!req.session.user.lastName && lastName) updateData.lastName = lastName;
+        // 6) Release telegram unique fields on the other account to avoid constraint conflicts
+        await tx.user.update({
+          where: { id: otherId },
+          data: { telegramId: null, telegramUsername: null, telegramPhotoUrl: null },
+        });
+
+        // 7) Update current user with telegram info and merge missing fields
+        const updateData = {
+          telegramId,
+          telegramUsername,
+          telegramPhotoUrl,
+          loyaltyPoints: mergedPoints,
+        };
+
+        const preferField = (field) => {
+          if (!meAccount?.[field] && otherAccount?.[field]) {
+            updateData[field] = otherAccount[field];
+          }
+        };
+
+        if (!meAccount?.name && name) updateData.name = name;
+        if (!meAccount?.firstName && firstName) updateData.firstName = firstName;
+        if (!meAccount?.lastName && lastName) updateData.lastName = lastName;
+
+        preferField("name");
+        preferField("firstName");
+        preferField("lastName");
+        preferField("phone");
+        preferField("addressStreet");
+        preferField("addressHouse");
+        preferField("addressApartment");
+        preferField("avatarPath");
+        preferField("email");
+        preferField("emailVerifiedAt");
 
         const updatedMe = await tx.user.update({ where: { id: meId }, data: updateData });
 
-        // 7) Revoke/delete refresh tokens of the merged (other) user and delete other account
+        // 8) Revoke/delete refresh tokens of the merged (other) user and delete other account
         await tx.refreshToken.updateMany({ where: { userId: otherId, revokedAt: null }, data: { revokedAt: new Date() } });
         await tx.user.delete({ where: { id: otherId } });
 
         return updatedMe;
       });
 
+      resolvedExisting = merged;
       req.session.user = publicUser(merged);
       try {
         clearCache(`favorites:${meId}`);
@@ -420,6 +492,105 @@ router.post("/telegram/link", requireAuth, async (req, res) => {
     if (!req.session.user.name && name) updateData.name = name;
     if (!req.session.user.firstName && firstName) updateData.firstName = firstName;
     if (!req.session.user.lastName && lastName) updateData.lastName = lastName;
+    if (!req.session.user.avatarPath && telegramPhotoUrl) {
+      updateData.avatarPath = null;
+    }
+
+    if (!existing && !req.session.user.email && req.session.user.id && telegramId) {
+      // Попробуем найти "телеграм-" аккаунт без email, чтобы его объединить
+      const orphan = await prisma.user.findFirst({
+        where: {
+          telegramId,
+          email: null,
+          id: { not: meId },
+        },
+      });
+      if (orphan) {
+        const merged = await prisma.$transaction(async (tx) => {
+          const meAccount = await tx.user.findUnique({ where: { id: meId } });
+          const otherAccount = await tx.user.findUnique({ where: { id: orphan.id } });
+          if (!otherAccount) return meAccount;
+
+          await tx.order.updateMany({ where: { userId: orphan.id }, data: { userId: meId } });
+
+          const otherCart = await tx.cartItem.findMany({ where: { userId: orphan.id } });
+          for (const it of otherCart) {
+            await tx.cartItem.upsert({
+              where: {
+                userId_collectionId_productId: {
+                  userId: meId,
+                  collectionId: it.collectionId,
+                  productId: it.productId,
+                },
+              },
+              update: {
+                quantityDecimal: it.quantityDecimal.toString(),
+                unitPriceKopecks: it.unitPriceKopecks,
+              },
+              create: {
+                userId: meId,
+                collectionId: it.collectionId,
+                productId: it.productId,
+                quantityDecimal: it.quantityDecimal.toString(),
+                unitPriceKopecks: it.unitPriceKopecks,
+              },
+            });
+          }
+          await tx.cartItem.deleteMany({ where: { userId: orphan.id } });
+
+          const otherFavs = await tx.favorite.findMany({ where: { userId: orphan.id } });
+          for (const f of otherFavs) {
+            await tx.favorite.upsert({
+              where: { userId_productId: { userId: meId, productId: f.productId } },
+              update: {},
+              create: { userId: meId, productId: f.productId },
+            });
+          }
+          await tx.favorite.deleteMany({ where: { userId: orphan.id } });
+
+          await tx.user.updateMany({ where: { referredBy: orphan.id }, data: { referredBy: meId } });
+
+          const mergedPoints = (meAccount?.loyaltyPoints || 0) + (otherAccount?.loyaltyPoints || 0);
+
+          const mergeData = {
+            telegramId,
+            telegramUsername,
+            telegramPhotoUrl,
+            loyaltyPoints: mergedPoints,
+          };
+          const preferField = (field) => {
+            if (!meAccount?.[field] && otherAccount?.[field]) {
+              mergeData[field] = otherAccount[field];
+            }
+          };
+          preferField("name");
+          preferField("firstName");
+          preferField("lastName");
+          preferField("phone");
+          preferField("addressStreet");
+          preferField("addressHouse");
+          preferField("addressApartment");
+          preferField("avatarPath");
+          preferField("email");
+          preferField("emailVerifiedAt");
+
+          const updatedMe = await tx.user.update({ where: { id: meId }, data: mergeData });
+          await tx.refreshToken.updateMany({ where: { userId: orphan.id, revokedAt: null }, data: { revokedAt: new Date() } });
+          await tx.user.delete({ where: { id: orphan.id } });
+
+          return updatedMe;
+        });
+
+        if (merged) {
+          req.session.user = publicUser(merged);
+          try {
+            clearCache(`favorites:${meId}`);
+            clearCache(`favorites:${orphan.id}`);
+          } catch {}
+          return res.json({ user: publicUser(merged), merged: true });
+        }
+      }
+    }
 
     const user = await prisma.user.update({ where: { id: meId }, data: updateData });
     req.session.user = publicUser(user);

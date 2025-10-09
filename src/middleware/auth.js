@@ -74,21 +74,11 @@ export function publicUser(u) {
     addressApartment: u.addressApartment ?? null,
   };
 }
-
-export function randomToken(bytes = 32) {
-  return crypto.randomBytes(bytes).toString("hex");
-}
-
-export function sha256Hex(value) {
-  return crypto.createHash("sha256").update(value).digest("hex");
-}
-
 // JWT helpers
 export function signAccessToken(user) {
   const payload = { sub: user.id, role: user.role };
   return jwt.sign(payload, JWT_ACCESS_SECRET, { expiresIn: JWT_ACCESS_TTL });
 }
-
 export function signRefreshToken(user) {
   const jti = randomToken(16);
   const payload = { sub: user.id, type: "refresh", jti };
