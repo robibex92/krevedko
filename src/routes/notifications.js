@@ -206,6 +206,68 @@ function normalizeNotificationPayload(notification) {
   return base;
 }
 
+async function fetchUnreadNotifications(prisma, userId) {
+  const [rawUser, notifications] = await Promise.all([
+    prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true, role: true, createdAt: true, loyaltyPoints: true, _count: { select: { orders: true } } },
+    }),
+    prisma.notification.findMany({
+      where: { isActive: true },
+      orderBy: [{ priority: "desc" }, { publishedAt: "desc" }, { createdAt: "desc" }],
+      include: { statuses: { where: { userId } } },
+    }),
+  ]);
+
+  const now = new Date();
+  const payload = [];
+  for (const notification of notifications) {
+    if (!isNowWithinSchedule(notification, now)) continue;
+    if (rawUser && !matchesAudience(notification, rawUser)) continue;
+    const status = notification.statuses?.[0] || null;
+    if (status) {
+      if (status.dontShowAgain) continue;
+      if (notification.showOnce && (status.status === "READ" || status.status === "DISMISSED")) {
+        continue;
+      }
+      if (status.status === "DISMISSED") continue;
+    }
+    payload.push({
+      ...normalizeNotificationPayload(notification),
+      status: status
+        ? {
+            status: status.status,
+            readAt: status.readAt,
+            dismissedAt: status.dismissedAt,
+            dontShowAgain: status.dontShowAgain,
+          }
+        : null,
+    });
+  }
+  return payload;
+}
+
+async function fetchHistoryNotifications(prisma, userId) {
+  const statuses = await prisma.userNotificationStatus.findMany({
+    where: { userId, status: { in: ["READ", "DISMISSED"] } },
+    include: { notification: true },
+    orderBy: [{ updatedAt: "desc" }],
+    take: 100,
+  });
+
+  return statuses
+    .filter((row) => row.notification)
+    .map((row) => ({
+      ...normalizeNotificationPayload(row.notification),
+      status: {
+        status: row.status,
+        readAt: row.readAt,
+        dismissedAt: row.dismissedAt,
+        dontShowAgain: row.dontShowAgain,
+      },
+    }));
+}
+
 // ------------------------
 // Public notification APIs
 // ------------------------
@@ -214,42 +276,7 @@ router.get("/notifications/unread", requireAuth, async (req, res) => {
   const prisma = req.app.locals.prisma;
   const userId = req.session.user.id;
   try {
-    const [rawUser, notifications] = await Promise.all([
-      prisma.user.findUnique({
-        where: { id: userId },
-        select: { id: true, role: true, createdAt: true, loyaltyPoints: true, _count: { select: { orders: true } } },
-      }),
-      prisma.notification.findMany({
-        where: { isActive: true },
-        orderBy: [{ priority: "desc" }, { publishedAt: "desc" }, { createdAt: "desc" }],
-        include: { statuses: { where: { userId } } },
-      }),
-    ]);
-
-    const now = new Date();
-    const payload = [];
-    for (const notification of notifications) {
-      if (!isNowWithinSchedule(notification, now)) continue;
-      if (rawUser && !matchesAudience(notification, rawUser)) continue;
-      const status = notification.statuses[0] || null;
-      if (status) {
-        if (status.dontShowAgain) continue;
-        if (notification.showOnce && (status.status === "READ" || status.status === "DISMISSED")) {
-          continue;
-        }
-        if (status.status === "DISMISSED") continue;
-      }
-      payload.push({
-        ...normalizeNotificationPayload(notification),
-        status: status ? {
-          status: status.status,
-          readAt: status.readAt,
-          dismissedAt: status.dismissedAt,
-          dontShowAgain: status.dontShowAgain,
-        } : null,
-      });
-    }
-
+    const payload = await fetchUnreadNotifications(prisma, userId);
     res.json({ notifications: payload });
   } catch (error) {
     console.error("[notifications] unread failed", error);
@@ -261,28 +288,26 @@ router.get("/notifications/history", requireAuth, async (req, res) => {
   const prisma = req.app.locals.prisma;
   const userId = req.session.user.id;
   try {
-    const statuses = await prisma.userNotificationStatus.findMany({
-      where: { userId, status: { in: ["READ", "DISMISSED"] } },
-      include: { notification: true },
-      orderBy: [{ updatedAt: "desc" }],
-      take: 100,
-    });
-
-    const payload = statuses
-      .filter((row) => row.notification)
-      .map((row) => ({
-        ...normalizeNotificationPayload(row.notification),
-        status: {
-          status: row.status,
-          readAt: row.readAt,
-          dismissedAt: row.dismissedAt,
-          dontShowAgain: row.dontShowAgain,
-        },
-      }));
+    const payload = await fetchHistoryNotifications(prisma, userId);
     res.json({ notifications: payload });
   } catch (error) {
     console.error("[notifications] history failed", error);
     res.status(500).json({ error: "NOTIFICATIONS_HISTORY_FAILED" });
+  }
+});
+
+router.get("/notifications", requireAuth, async (req, res) => {
+  const prisma = req.app.locals.prisma;
+  const userId = req.session.user.id;
+  try {
+    const [unread, history] = await Promise.all([
+      fetchUnreadNotifications(prisma, userId),
+      fetchHistoryNotifications(prisma, userId),
+    ]);
+    res.json({ unread, history });
+  } catch (error) {
+    console.error("[notifications] combined fetch failed", error);
+    res.status(500).json({ error: "NOTIFICATIONS_COMBINED_FETCH_FAILED" });
   }
 });
 

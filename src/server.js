@@ -28,6 +28,7 @@ import productFeedbackRouter from "./routes/product-feedback.js";
 import { productUpload } from "./services/uploads.js";
 import referralRouter from "./routes/referral.js";
 import adminRouter from "./routes/admin.js";
+import notificationsRouter from "./routes/notifications.js";
 import verifyEmailRouter from "./routes/verify-email.js";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -192,6 +193,7 @@ app.use("/api", profileRouter);
 app.use("/api", publicReviewsRouter);
 app.use("/api", productFeedbackRouter);
 app.use("/api", referralRouter);
+app.use("/api", notificationsRouter);
 app.use("/api", adminRouter);
 
 // Centralized error handler
