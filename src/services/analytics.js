@@ -53,20 +53,17 @@ export async function getAnalyticsData(prisma, days = 7) {
 
   let topProductsRaw = [];
   try {
-    topProductsRaw = await prisma.$queryRawUnsafe(
-      `
-        SELECT oi."productId" as productId,
-               COUNT(oi.id) as orderCount,
-               SUM(oi."subtotalKopecks") as revenue
-        FROM "OrderItem" oi
-        JOIN "Order" o ON o.id = oi."orderId"
-        WHERE o."createdAt" >= ?
-        GROUP BY oi."productId"
-        ORDER BY orderCount DESC
-        LIMIT 10
-      `,
-      startDate
-    );
+    topProductsRaw = await prisma.$queryRaw`
+      SELECT oi."productId" AS "productId",
+             COUNT(oi.id)     AS "orderCount",
+             SUM(oi."subtotalKopecks") AS "revenue"
+      FROM "OrderItem" oi
+      JOIN "Order" o ON o.id = oi."orderId"
+      WHERE o."createdAt" >= ${startDate}
+      GROUP BY oi."productId"
+      ORDER BY "orderCount" DESC
+      LIMIT 10
+    `;
   } catch (error) {
     console.warn("[analytics] Error fetching top products:", error);
     topProductsRaw = [];
@@ -87,17 +84,14 @@ export async function getAnalyticsData(prisma, days = 7) {
 
   let dailyOrders = [];
   try {
-    dailyOrders = await prisma.$queryRawUnsafe(
-      `
-        SELECT DATE("createdAt") as date,
-               COUNT(*) as orders
-        FROM "Order"
-        WHERE "createdAt" >= ?
-        GROUP BY DATE("createdAt")
-        ORDER BY date ASC
-      `,
-      startDate
-    );
+    dailyOrders = await prisma.$queryRaw`
+      SELECT DATE("createdAt") AS "date",
+             COUNT(*)          AS "orders"
+      FROM "Order"
+      WHERE "createdAt" >= ${startDate}
+      GROUP BY DATE("createdAt")
+      ORDER BY "date" ASC
+    `;
   } catch (error) {
     console.warn("[analytics] Error fetching daily orders:", error);
     dailyOrders = [];

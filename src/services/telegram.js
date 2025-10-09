@@ -58,26 +58,43 @@ export async function sendTelegramMessage(chatId, text, options = {}) {
   const result = await res.json();
   return result;
 }
-
 export async function sendTelegramPhoto(chatId, photoPath, caption, options = {}) {
   const { TELEGRAM_BOT_TOKEN: token } = process.env;
   if (!token) throw new Error("TELEGRAM_NOT_CONFIGURED");
   const fetchImpl = await ensureFetch();
   const url = `https://api.telegram.org/bot${token}/sendPhoto`;
-  
-  const formData = new FormData();
-  formData.append("chat_id", chatId);
-  formData.append("photo", fs.createReadStream(photoPath));
-  if (caption) formData.append("caption", caption);
-  formData.append("parse_mode", options.parseMode || "HTML");
-  if (options.threadId) formData.append("message_thread_id", options.threadId);
-  
-  const res = await fetchImpl(url, {
-    method: "POST",
-    body: formData,
-    headers: formData.getHeaders(),
-  });
-  
+  const isUrl = typeof photoPath === "string" && /^https?:\/\//i.test(photoPath);
+
+  let res;
+  if (isUrl) {
+    const body = {
+      chat_id: chatId,
+      photo: photoPath,
+      parse_mode: options.parseMode || "HTML",
+    };
+    if (caption) body.caption = caption;
+    if (options.threadId) body.message_thread_id = options.threadId;
+
+    res = await fetchImpl(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+  } else {
+    const formData = new FormData();
+    formData.append("chat_id", chatId);
+    formData.append("photo", fs.createReadStream(photoPath));
+    if (caption) formData.append("caption", caption);
+    formData.append("parse_mode", options.parseMode || "HTML");
+    if (options.threadId) formData.append("message_thread_id", options.threadId);
+
+    res = await fetchImpl(url, {
+      method: "POST",
+      body: formData,
+      headers: formData.getHeaders(),
+    });
+  }
+
   if (!res.ok) {
     const body = await res.text();
     throw new Error(`TELEGRAM_SEND_PHOTO_FAILED:${res.status}:${body}`);
