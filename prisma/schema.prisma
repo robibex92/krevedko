@@ -29,6 +29,8 @@ model User {
   emailVerifiedAt            DateTime?
   emailVerificationTokenHash String?
   emailVerificationExpiresAt DateTime?
+  createdAt                  DateTime  @default(now())
+  updatedAt                  DateTime  @updatedAt
 
   cartItems     CartItem[]
   orders        Order[]
