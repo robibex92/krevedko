@@ -97,13 +97,15 @@ model Product {
   tags             String? // JSON array of tags for search
   searchKeywords   String?
 
-  collectionProducts CollectionProduct[]
-  cartItems          CartItem[]
-  orderItems         OrderItem[]
-  favorites          Favorite[]
-  reviews            Review[]
-  publicReviews      PublicReview[]
-  comments           Comment[]
+  collectionProducts     CollectionProduct[]
+  cartItems              CartItem[]
+  orderItems             OrderItem[]
+  favorites              Favorite[]
+  reviews                Review[]
+  publicReviews          PublicReview[]
+  comments               Comment[]
+  telegramMessages       ProductTelegramMessage[]
+  inStockTelegramMessage InStockTelegramMessage?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -343,4 +345,78 @@ model RefreshToken {
 
   @@index([userId])
   @@index([expiresAt])
+}
+
+model Category {
+  id              Int      @id @default(autoincrement())
+  name            String   @unique
+  telegramChatId  String
+  telegramThreadId String?
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  productMessages ProductTelegramMessage[]
+}
+
+model ProductTelegramMessage {
+  id               Int       @id @default(autoincrement())
+  productId        Int
+  categoryId       Int
+  messageId        String
+  messageText      String    @db.Text
+  hasMedia         Boolean   @default(false)
+  mediaType        String?   // "photo" | null
+  sentAt           DateTime  @default(now())
+  lastEditedAt     DateTime?
+  canEdit          Boolean   @default(true)
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  product  Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  category Category @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+
+  @@unique([productId, categoryId])
+  @@index([productId])
+  @@index([categoryId])
+}
+
+model InStockTelegramMessage {
+  id          Int       @id @default(autoincrement())
+  productId   Int       @unique
+  messageId   String
+  messageText String    @db.Text
+  hasMedia    Boolean   @default(false)
+  sentAt      DateTime  @default(now())
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+}
+
+model TelegramSettings {
+  id                    Int      @id @default(autoincrement())
+  key                   String   @unique
+  chatId                String?
+  threadId              String?
+  description           String?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+}
+
+model TelegramMessageQueue {
+  id           Int       @id @default(autoincrement())
+  messageType  String    // "product_create", "product_update", "product_delete", "review", "recipe", "in_stock_add", "in_stock_remove"
+  payload      Json
+  status       String    @default("PENDING") // "PENDING", "PROCESSING", "SENT", "FAILED"
+  attempts     Int       @default(0)
+  maxAttempts  Int       @default(3)
+  error        String?   @db.Text
+  scheduledFor DateTime  @default(now())
+  sentAt       DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@index([status, scheduledFor])
+  @@index([messageType])
 }

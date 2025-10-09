@@ -15,6 +15,7 @@ import {
   toRecipeDetail,
   toRecipeSummary,
 } from "../utils/recipes.js";
+import { enqueueMessage } from "../services/telegram-bot.js";
 
 const router = Router();
 
@@ -127,6 +128,18 @@ router.post(
         },
         include: recipeAuthorInclude,
       });
+      
+      // Отправляем в телеграм, если рецепт опубликован
+      if (effectiveStatus === "PUBLISHED") {
+        try {
+          await enqueueMessage(prisma, "recipe", {
+            recipeId: created.id,
+          });
+        } catch (error) {
+          console.error("Failed to enqueue recipe message:", error);
+        }
+      }
+      
       res.status(201).json({ recipe: toRecipeDetail(created) });
     } catch (error) {
       console.error(error);
@@ -194,6 +207,18 @@ router.patch(
         data,
         include: recipeAuthorInclude,
       });
+      
+      // Отправляем в телеграм, если рецепт был опубликован впервые
+      if (nextStatus === "PUBLISHED" && !existing.publishedAt) {
+        try {
+          await enqueueMessage(prisma, "recipe", {
+            recipeId: updated.id,
+          });
+        } catch (error) {
+          console.error("Failed to enqueue recipe message:", error);
+        }
+      }
+      
       res.json({ recipe: toRecipeDetail(updated) });
     } catch (error) {
       console.error(error);
@@ -295,6 +320,100 @@ router.patch(
   }
 );
 
+// Categories admin
+router.get("/admin/categories", requireAuth, requireAdmin, async (req, res) => {
+  const prisma = req.app.locals.prisma;
+  try {
+    const categories = await prisma.category.findMany({
+      where: { isActive: true },
+      orderBy: { name: "asc" },
+    });
+    res.json({ categories });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "CATEGORIES_FETCH_FAILED" });
+  }
+});
+
+router.post("/admin/categories", requireAuth, requireAdmin, async (req, res) => {
+  const prisma = req.app.locals.prisma;
+  try {
+    const { name, telegramChatId, telegramThreadId } = req.body || {};
+    if (!name || !telegramChatId) {
+      return res.status(400).json({ error: "REQUIRED_FIELDS_MISSING" });
+    }
+    const category = await prisma.category.create({
+      data: {
+        name,
+        telegramChatId,
+        telegramThreadId: telegramThreadId || null,
+      },
+    });
+    res.status(201).json({ category });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "CATEGORY_CREATE_FAILED" });
+  }
+});
+
+router.patch("/admin/categories/:id", requireAuth, requireAdmin, async (req, res) => {
+  const prisma = req.app.locals.prisma;
+  try {
+    const id = Number(req.params.id);
+    const { name, telegramChatId, telegramThreadId, isActive } = req.body || {};
+    const data = {};
+    if (name !== undefined) data.name = name;
+    if (telegramChatId !== undefined) data.telegramChatId = telegramChatId;
+    if (telegramThreadId !== undefined) data.telegramThreadId = telegramThreadId || null;
+    if (isActive !== undefined) data.isActive = Boolean(isActive);
+    const category = await prisma.category.update({ where: { id }, data });
+    res.json({ category });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "CATEGORY_UPDATE_FAILED" });
+  }
+});
+
+// Telegram settings
+router.get("/admin/telegram-settings", requireAuth, requireAdmin, async (req, res) => {
+  const prisma = req.app.locals.prisma;
+  try {
+    const settings = await prisma.telegramSettings.findMany({
+      orderBy: { key: "asc" },
+    });
+    res.json({ settings });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "TELEGRAM_SETTINGS_FETCH_FAILED" });
+  }
+});
+
+router.put("/admin/telegram-settings/:key", requireAuth, requireAdmin, async (req, res) => {
+  const prisma = req.app.locals.prisma;
+  try {
+    const { key } = req.params;
+    const { chatId, threadId, description } = req.body || {};
+    const setting = await prisma.telegramSettings.upsert({
+      where: { key },
+      update: {
+        chatId: chatId || null,
+        threadId: threadId || null,
+        description: description || null,
+      },
+      create: {
+        key,
+        chatId: chatId || null,
+        threadId: threadId || null,
+        description: description || null,
+      },
+    });
+    res.json({ setting });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "TELEGRAM_SETTINGS_UPDATE_FAILED" });
+  }
+});
+
 // Products admin
 router.get("/admin/products", requireAuth, requireAdmin, async (req, res) => {
   const prisma = req.app.locals.prisma;
@@ -353,6 +472,36 @@ router.post("/admin/products", requireAuth, requireAdmin, async (req, res) => {
     });
     clearCache("products");
     clearCache("favorites:");
+    
+    // Отправляем в телеграм, если товар активен и указана категория
+    if (p.isActive && p.category) {
+      try {
+        const dbCategory = await prisma.category.findFirst({
+          where: { name: p.category, isActive: true },
+        });
+        if (dbCategory) {
+          await enqueueMessage(prisma, "product_create", {
+            productId: p.id,
+            categoryId: dbCategory.id,
+          });
+        }
+      } catch (error) {
+        console.error("Failed to enqueue product creation message:", error);
+        // Не возвращаем ошибку, товар уже создан
+      }
+    }
+    
+    // Добавляем в чат быстрых продаж, если можно забрать сейчас
+    if (p.isActive && p.canPickupNow) {
+      try {
+        await enqueueMessage(prisma, "quick_pickup_add", {
+          productId: p.id,
+        });
+      } catch (error) {
+        console.error("Failed to enqueue quick pickup message:", error);
+      }
+    }
+    
     res.status(201).json({ product: p });
   } catch (err) {
     console.error(err);
@@ -368,6 +517,11 @@ router.patch(
     const prisma = req.app.locals.prisma;
     try {
       const productId = Number(req.params.id);
+      const existing = await prisma.product.findUnique({ where: { id: productId } });
+      if (!existing) {
+        return res.status(404).json({ error: "PRODUCT_NOT_FOUND" });
+      }
+      
       const { stockQuantity, minStock } = req.body || {};
       if (stockQuantity === undefined && minStock === undefined) {
         return res.status(400).json({ error: "NO_STOCK_DATA" });
@@ -380,6 +534,7 @@ router.patch(
         where: { id: productId },
         data,
       });
+      
       res.json({ product });
     } catch (err) {
       console.error(err);
@@ -426,6 +581,11 @@ router.patch(
     const prisma = req.app.locals.prisma;
     try {
       const id = Number(req.params.id);
+      const existing = await prisma.product.findUnique({ where: { id } });
+      if (!existing) {
+        return res.status(404).json({ error: "PRODUCT_NOT_FOUND" });
+      }
+      
       const {
         title,
         description,
@@ -464,6 +624,50 @@ router.patch(
       const p = await prisma.product.update({ where: { id }, data });
       clearCache("products");
       clearCache("favorites:");
+      
+      // Обновляем сообщения в телеграм
+      try {
+        const wasActive = existing.isActive;
+        const nowActive = p.isActive;
+        
+        // Если товар стал неактивным
+        if (wasActive && !nowActive) {
+          await enqueueMessage(prisma, "product_remove", {
+            productId: p.id,
+          });
+        } 
+        // Если товар активен, обновляем сообщения
+        else if (nowActive && p.category) {
+          const dbCategory = await prisma.category.findFirst({
+            where: { name: p.category, isActive: true },
+          });
+          if (dbCategory) {
+            await enqueueMessage(prisma, "product_update", {
+              productId: p.id,
+              categoryId: dbCategory.id,
+            });
+          }
+        }
+        
+        // Управление чатом быстрых продаж
+        const wasQuickPickup = existing.canPickupNow;
+        const nowQuickPickup = p.canPickupNow;
+        
+        if (nowActive && nowQuickPickup && !wasQuickPickup) {
+          // Добавляем в чат быстрых продаж
+          await enqueueMessage(prisma, "quick_pickup_add", {
+            productId: p.id,
+          });
+        } else if ((!nowActive || !nowQuickPickup) && wasQuickPickup) {
+          // Удаляем из чата быстрых продаж
+          await enqueueMessage(prisma, "quick_pickup_remove", {
+            productId: p.id,
+          });
+        }
+      } catch (error) {
+        console.error("Failed to enqueue product update message:", error);
+      }
+      
       res.json({ product: p });
     } catch (err) {
       console.error(err);
@@ -493,6 +697,23 @@ router.post(
         where: { id },
         data: { imagePath: relPath },
       });
+
+      // Обновляем сообщения в телеграм с новым изображением
+      if (p.isActive && p.category) {
+        try {
+          const dbCategory = await prisma.category.findFirst({
+            where: { name: p.category, isActive: true },
+          });
+          if (dbCategory) {
+            await enqueueMessage(prisma, "product_update", {
+              productId: p.id,
+              categoryId: dbCategory.id,
+            });
+          }
+        } catch (error) {
+          console.error("Failed to enqueue product image update:", error);
+        }
+      }
 
       // возвращаем вместе с url для фронта
       res.json({
@@ -647,10 +868,46 @@ router.patch(
       const { status } = req.body || {};
       if (!["SUBMITTED", "PAID", "CANCELLED"].includes(status))
         return res.status(400).json({ error: "INVALID_STATUS" });
+      
+      const existingOrder = await prisma.order.findUnique({
+        where: { id },
+        include: { items: true },
+      });
+      
+      if (!existingOrder) {
+        return res.status(404).json({ error: "ORDER_NOT_FOUND" });
+      }
+      
       const order = await prisma.order.update({
         where: { id },
         data: { status },
       });
+      
+      // Если заказ отменяется - возвращаем остатки
+      if (status === "CANCELLED" && existingOrder.status !== "CANCELLED") {
+        try {
+          const { dec } = await import("../utils/decimal.js");
+          for (const item of existingOrder.items) {
+            const product = await prisma.product.findUnique({
+              where: { id: item.productId },
+            });
+            if (product) {
+              const currentStock = dec(product.stockQuantity);
+              const returnedQty = dec(item.quantityDecimal);
+              const newStock = currentStock.add(returnedQty);
+              
+              await prisma.product.update({
+                where: { id: product.id },
+                data: { stockQuantity: newStock.toString() },
+              });
+            }
+          }
+        } catch (error) {
+          console.error("Failed to return stock on order cancellation:", error);
+          // Не возвращаем ошибку, заказ уже отменен
+        }
+      }
+      
       res.json({ order });
     } catch (err) {
       console.error(err);

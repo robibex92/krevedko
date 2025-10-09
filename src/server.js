@@ -30,6 +30,7 @@ import referralRouter from "./routes/referral.js";
 import adminRouter from "./routes/admin.js";
 import notificationsRouter from "./routes/notifications.js";
 import verifyEmailRouter from "./routes/verify-email.js";
+import { processMessageQueue } from "./services/telegram-bot.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -54,9 +55,12 @@ const uploadProductsDir = path.join(uploadRoot, "products");
 const uploadPaymentsDir = path.join(uploadRoot, "payments");
 const uploadAvatarsDir = path.join(uploadRoot, "avatars");
 const uploadReviewsDir = path.join(uploadRoot, "reviews");
+const uploadRecipesDir = path.join(uploadRoot, "recipes");
 fs.mkdirSync(uploadProductsDir, { recursive: true });
 fs.mkdirSync(uploadPaymentsDir, { recursive: true });
 fs.mkdirSync(uploadAvatarsDir, { recursive: true });
+fs.mkdirSync(uploadReviewsDir, { recursive: true });
+fs.mkdirSync(uploadRecipesDir, { recursive: true });
 
 const SQLiteStore = connectSqlite3(session);
 const sessionDir = path.resolve(__dirname, "../.data");
@@ -206,9 +210,29 @@ const server = app.listen(PORT, HOST, () => {
   console.log(`[server] started on ${PORT}`);
 });
 
+// Telegram bot message queue processor
+let queueInterval = null;
+if (process.env.TELEGRAM_BOT_TOKEN) {
+  console.log("[telegram-bot] Message queue processor enabled");
+  // Обрабатываем очередь каждые 10 секунд
+  queueInterval = setInterval(async () => {
+    try {
+      await processMessageQueue(prisma);
+    } catch (error) {
+      console.error("[telegram-bot] Queue processing error:", error);
+    }
+  }, 10000);
+} else {
+  console.log("[telegram-bot] Message queue processor disabled (no TELEGRAM_BOT_TOKEN)");
+}
+
 async function shutdown(signal) {
   try {
     console.log(`[server] Received ${signal}, shutting down...`);
+    if (queueInterval) {
+      clearInterval(queueInterval);
+      console.log("[telegram-bot] Queue processor stopped");
+    }
     await prisma.$disconnect();
     server.close(() => {
       console.log("[server] HTTP server closed");

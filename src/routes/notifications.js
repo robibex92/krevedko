@@ -208,24 +208,33 @@ function normalizeNotificationPayload(notification) {
 
 async function fetchUnreadNotifications(prisma, userId) {
   const [rawUser, notifications] = await Promise.all([
-    prisma.user.findUnique({
-      where: { id: userId },
-      select: { id: true, role: true, createdAt: true, loyaltyPoints: true, _count: { select: { orders: true } } },
-    }),
-    prisma.notification.findMany({
-      where: { isActive: true },
-      orderBy: [{ priority: "desc" }, { publishedAt: "desc" }, { createdAt: "desc" }],
-      include: { statuses: { where: { userId } } },
-    }),
+    userId
+      ? prisma.user.findUnique({
+          where: { id: userId },
+          select: { id: true, role: true, createdAt: true, loyaltyPoints: true, _count: { select: { orders: true } } },
+        })
+      : null,
+    (async () => {
+      const query = {
+        where: { isActive: true },
+        orderBy: [{ priority: "desc" }, { publishedAt: "desc" }, { createdAt: "desc" }],
+      };
+      if (userId) {
+        query.include = { statuses: { where: { userId } } };
+      }
+      return prisma.notification.findMany(query);
+    })(),
   ]);
 
   const now = new Date();
   const payload = [];
   for (const notification of notifications) {
     if (!isNowWithinSchedule(notification, now)) continue;
+    if (notification.audience === "CUSTOM" && !rawUser) continue;
     if (rawUser && !matchesAudience(notification, rawUser)) continue;
-    const status = notification.statuses?.[0] || null;
-    if (status) {
+    const statuses = Array.isArray(notification.statuses) ? notification.statuses : [];
+    const status = statuses[0] || null;
+    if (userId && status) {
       if (status.dontShowAgain) continue;
       if (notification.showOnce && (status.status === "READ" || status.status === "DISMISSED")) {
         continue;
@@ -308,6 +317,17 @@ router.get("/notifications", requireAuth, async (req, res) => {
   } catch (error) {
     console.error("[notifications] combined fetch failed", error);
     res.status(500).json({ error: "NOTIFICATIONS_COMBINED_FETCH_FAILED" });
+  }
+});
+
+router.get("/notifications/public", async (req, res) => {
+  const prisma = req.app.locals.prisma;
+  try {
+    const unread = await fetchUnreadNotifications(prisma, null);
+    res.json({ notifications: unread });
+  } catch (error) {
+    console.error("[notifications] public fetch failed", error);
+    res.status(500).json({ error: "NOTIFICATIONS_PUBLIC_FETCH_FAILED" });
   }
 });
 

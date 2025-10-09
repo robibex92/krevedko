@@ -75,6 +75,18 @@ router.post("/cart/submit", requireAuth, async (req, res) => {
 
         for (const p of prepared) {
           await tx.orderItem.create({ data: { orderId: order.id, productId: p.cartItem.productId, titleSnapshot: p.cartItem.product.title, unitLabelSnapshot: p.cartItem.product.unitLabel, quantityDecimal: p.cartItem.quantityDecimal.toString(), unitPriceKopecks: p.unitPriceKopecks, subtotalKopecks: p.subtotalKopecks, imagePathSnapshot: p.cartItem.product.imagePath || null } });
+          
+          // Уменьшаем остаток товара
+          const product = p.cartItem.product;
+          const currentStock = dec(product.stockQuantity);
+          const orderedQty = dec(p.cartItem.quantityDecimal);
+          const newStock = currentStock.sub(orderedQty);
+          
+          // Обновляем остаток (не даем уйти в отрицательные значения)
+          await tx.product.update({
+            where: { id: product.id },
+            data: { stockQuantity: newStock.lt(0) ? "0" : newStock.toString() }
+          });
         }
 
         await tx.cartItem.deleteMany({ where: { userId: req.session.user.id, collectionId: target.collection.id } });

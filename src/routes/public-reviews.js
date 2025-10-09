@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { requireAuth } from "../middleware/auth.js";
 import { reviewUpload } from "../services/uploads.js";
+import { enqueueMessage } from "../services/telegram-bot.js";
 import path from "path";
 
 const router = Router();
@@ -60,6 +61,16 @@ router.post("/public/reviews", requireAuth, reviewUpload.array("images", 5), asy
     }
 
     const created = await prisma.publicReview.findUnique({ where: { id: review.id }, include: { user: { select: { id: true, name: true, firstName: true, lastName: true, avatarPath: true } }, images: true } });
+
+    // Отправляем отзыв в телеграм
+    try {
+      await enqueueMessage(prisma, "review", {
+        reviewId: created.id,
+      });
+    } catch (error) {
+      console.error("Failed to enqueue review message:", error);
+      // Не возвращаем ошибку, отзыв уже создан
+    }
 
     res.status(201).json({ review: { id: created.id, title: created.title, content: created.content, rating: created.rating, createdAt: created.createdAt, user: created.user, images: created.images.map((img) => img.imagePath) } });
   } catch (err) {
