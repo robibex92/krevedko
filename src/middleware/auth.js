@@ -68,12 +68,20 @@ export function publicUser(u) {
     telegramId: u.telegramId ?? null,
     telegramUsername: u.telegramUsername ?? null,
     telegramPhotoUrl: u.telegramPhotoUrl ?? null,
-    avatarPath: u.avatarPath ?? null,
     addressStreet: u.addressStreet ?? null,
     addressHouse: u.addressHouse ?? null,
     addressApartment: u.addressApartment ?? null,
   };
 }
+
+export function randomToken(bytes = 32) {
+  return crypto.randomBytes(bytes).toString("hex");
+}
+
+export function sha256Hex(value) {
+  return crypto.createHash("sha256").update(value).digest("hex");
+}
+
 // JWT helpers
 export function signAccessToken(user) {
   const payload = { sub: user.id, role: user.role };
