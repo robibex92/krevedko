@@ -17,6 +17,29 @@ function formatPrice(kopecks) {
   return `${rubles} ₽`;
 }
 
+function resolveProductImageSource(imagePath) {
+  if (!imagePath) return { url: null, filePath: null };
+  if (/^https?:\/\//i.test(imagePath)) {
+    return { url: imagePath, filePath: null };
+  }
+
+  const normalized = imagePath.replace(/^\/+/, "");
+  const trimmed = normalized.startsWith("uploads/")
+    ? normalized.slice("uploads/".length)
+    : normalized;
+
+  let baseUrl = process.env.UPLOADS_BASE_URL || null;
+  if (!baseUrl && process.env.API_URL) {
+    baseUrl = `${process.env.API_URL.replace(/\/$/, "")}/uploads`;
+  }
+  baseUrl = baseUrl ? baseUrl.replace(/\/$/, "") : null;
+
+  const url = baseUrl ? `${baseUrl}/${trimmed}` : null;
+  const filePath = path.join(process.cwd(), "uploads", trimmed);
+
+  return { url, filePath };
+}
+
 /**
  * Создание текста сообщения для товара
  */
@@ -135,19 +158,25 @@ export async function sendProductToCategory(prisma, product, category) {
     
     // Если есть изображение, отправляем с фото
     if (product.imagePath) {
-      const imagePath = path.join(process.cwd(), "uploads", product.imagePath);
-      try {
-        result = await sendTelegramPhoto(
-          chatId,
-          imagePath,
-          messageText,
-          { threadId }
-        );
-        hasMedia = true;
-        mediaType = "photo";
-      } catch (error) {
-        console.error(`Failed to send photo for product ${product.id}:`, error);
-        // Если не удалось отправить фото, отправляем текст
+      const { url: photoUrl, filePath } = resolveProductImageSource(product.imagePath);
+      const photoSource = photoUrl || filePath;
+
+      if (photoSource) {
+        try {
+          result = await sendTelegramPhoto(
+            chatId,
+            photoSource,
+            messageText,
+            { threadId }
+          );
+          hasMedia = true;
+          mediaType = "photo";
+        } catch (error) {
+          console.error(`Failed to send photo for product ${product.id}:`, error);
+          // Если не удалось отправить фото, отправляем текст
+          result = await sendTelegramMessage(chatId, messageText, { threadId });
+        }
+      } else {
         result = await sendTelegramMessage(chatId, messageText, { threadId });
       }
     } else {
@@ -217,11 +246,20 @@ export async function updateProductMessage(prisma, product, categoryId) {
       // Проверяем изменение медиа
       const hasNewImage = !!product.imagePath;
       const hadImage = messageRecord.hasMedia;
-      
+
+      const { url: newPhotoUrl, filePath: newPhotoPath } = resolveProductImageSource(
+        product.imagePath
+      );
+      const newPhotoSource = newPhotoUrl || newPhotoPath;
+
       if (hasNewImage && hadImage) {
-        // Обновляем фото и текст
-        const imagePath = path.join(process.cwd(), "uploads", product.imagePath);
-        await editTelegramMessageMedia(chatId, messageId, imagePath, newMessageText);
+        if (newPhotoSource) {
+          // Обновляем фото и текст
+          await editTelegramMessageMedia(chatId, messageId, newPhotoSource, newMessageText);
+        } else {
+          // Нет доступного медиа — обновляем только текст
+          await editTelegramMessage(chatId, messageId, newMessageText);
+        }
       } else if (hasNewImage && !hadImage) {
         // Было текстовое, стало с фото - удаляем старое, создаем новое
         await deleteTelegramMessage(chatId, messageId);
@@ -240,8 +278,8 @@ export async function updateProductMessage(prisma, product, categoryId) {
         data: {
           messageText: newMessageText,
           lastEditedAt: new Date(),
-          hasMedia: hasNewImage,
-          mediaType: hasNewImage ? "photo" : null,
+          hasMedia: Boolean(newPhotoSource),
+          mediaType: newPhotoSource ? "photo" : null,
         },
       });
       
