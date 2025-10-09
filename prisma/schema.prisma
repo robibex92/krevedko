@@ -7,6 +7,23 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+enum NotificationPriority {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+enum NotificationStatus {
+  NEW
+  READ
+  DISMISSED
+}
+
+enum NotificationAudience {
+  ALL
+  CUSTOM
+}
+
 model User {
   id                         Int       @id @default(autoincrement())
   email                      String?   @unique
@@ -42,6 +59,7 @@ model User {
   referrer      User?          @relation("UserReferrals", fields: [referredBy], references: [id])
   refreshTokens RefreshToken[]
   recipes       Recipe[]
+  notificationStatuses UserNotificationStatus[]
 }
 
 model Collection {
@@ -201,6 +219,49 @@ model PublicReviewImage {
   review PublicReview @relation(fields: [reviewId], references: [id], onDelete: Cascade)
 
   @@index([reviewId])
+}
+
+model Notification {
+  id              Int                   @id @default(autoincrement())
+  slug            String                @unique
+  title           String
+  excerpt         String?
+  bodyBbcode      String
+  bodyHtml        String
+  imagePath       String?
+  linkUrl         String?
+  priority        NotificationPriority  @default(MEDIUM)
+  audience        NotificationAudience  @default(ALL)
+  audienceFilter  Json?
+  isActive        Boolean               @default(true)
+  showOnce        Boolean               @default(false)
+  startsAt        DateTime?
+  endsAt          DateTime?
+  publishedAt     DateTime?
+  createdAt       DateTime              @default(now())
+  updatedAt       DateTime              @updatedAt
+
+  statuses UserNotificationStatus[]
+
+  @@index([isActive, startsAt, endsAt])
+}
+
+model UserNotificationStatus {
+  id             Int                 @id @default(autoincrement())
+  userId         Int
+  notificationId Int
+  status         NotificationStatus  @default(NEW)
+  readAt         DateTime?
+  dismissedAt    DateTime?
+  dontShowAgain  Boolean             @default(false)
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  notification Notification @relation(fields: [notificationId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, notificationId])
+  @@index([status])
 }
 
 model PaymentProof {

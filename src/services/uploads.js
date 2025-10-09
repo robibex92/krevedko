@@ -14,6 +14,7 @@ export const uploadPaymentsDir = path.join(uploadRoot, "payments");
 export const uploadAvatarsDir = path.join(uploadRoot, "avatars");
 export const uploadReviewsDir = path.join(uploadRoot, "reviews");
 export const uploadRecipesDir = path.join(uploadRoot, "recipes");
+export const uploadNotificationsDir = path.join(uploadRoot, "notifications");
 
 // создаём папки, если их нет
 for (const dir of [
@@ -23,6 +24,7 @@ for (const dir of [
   uploadAvatarsDir,
   uploadReviewsDir,
   uploadRecipesDir,
+  uploadNotificationsDir,
 ]) {
   fs.mkdirSync(dir, { recursive: true });
 }
@@ -133,6 +135,7 @@ export const paymentUpload = makeImageUpload({ dir: uploadPaymentsDir });
 export const avatarUpload = makeImageUpload({ dir: uploadAvatarsDir });
 export const reviewUpload = makeImageUpload({ dir: uploadReviewsDir, maxFiles: 5 });
 export const recipesUpload = makeMediaUpload({ dir: uploadRecipesDir, maxFiles: 10, fileSizeMb: 200 });
+export const notificationUpload = makeImageUpload({ dir: uploadNotificationsDir, maxFiles: 3, fileSizeMb: 8 });
 
 // --- тестовый роут для проверки ---
 // пример использования (добавь в сервер):
