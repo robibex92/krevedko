@@ -46,6 +46,8 @@ model User {
   emailVerifiedAt            DateTime?
   emailVerificationTokenHash String?
   emailVerificationExpiresAt DateTime?
+  passwordResetTokenHash     String?
+  passwordResetExpiresAt     DateTime?
   createdAt                  DateTime  @default(now())
   updatedAt                  DateTime  @updatedAt
 

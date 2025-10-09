@@ -51,3 +51,29 @@ export async function sendVerificationEmail(email, token) {
     text,
   });
 }
+
+export async function sendPasswordResetEmail(email, token) {
+  const mailer = await getMailer();
+
+  const resetUrl = `${APP_BASE_URL}/reset-password?token=${encodeURIComponent(
+    token
+  )}&email=${encodeURIComponent(email)}`;
+
+  console.log(`=== Password reset URL: ${resetUrl} ===`);
+
+  const html = `
+    <p>Здравствуйте!</p>
+    <p>Вы запросили сброс пароля. Перейдите по ссылке ниже, чтобы задать новый пароль. Ссылка действует 1 час.</p>
+    <p><a href="${resetUrl}">Сбросить пароль</a></p>
+    <p>Если вы не запрашивали сброс, просто проигнорируйте письмо.</p>
+  `;
+  const text = `Сброс пароля: ${resetUrl}\nСсылка действует 1 час.`;
+
+  await mailer.sendMail({
+    from: EMAIL_FROM,
+    to: email,
+    subject: "Сброс пароля",
+    html,
+    text,
+  });
+}

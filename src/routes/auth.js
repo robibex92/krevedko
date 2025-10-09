@@ -13,8 +13,7 @@ import {
   clearRefreshCookie,
   resolveUserId,
 } from "../middleware/auth.js";
-import { clearVerificationState } from "../services/verify-email.js";
-import { sendVerificationEmail } from "../services/mailer.js";
+import { sendVerificationEmail, sendPasswordResetEmail } from "../services/mailer.js";
 import { verifyTelegramLogin } from "../services/telegram.js";
 import { clearCache } from "../services/cache.js";
 
@@ -86,6 +85,110 @@ router.post("/register", async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "REGISTER_FAILED" });
+  }
+});
+
+router.post("/password/forgot", async (req, res) => {
+  const prisma = req.app.locals.prisma;
+  try {
+    const { email } = req.body || {};
+    const normalizedEmail = String(email || "").trim().toLowerCase();
+    if (!normalizedEmail) return res.status(400).json({ error: "EMAIL_REQUIRED" });
+
+    const user = await prisma.user.findUnique({ where: { email: normalizedEmail } });
+
+    if (user) {
+      const token = randomToken(32);
+      await prisma.user.update({
+        where: { id: user.id },
+        data: {
+          passwordResetTokenHash: sha256Hex(token),
+          passwordResetExpiresAt: new Date(Date.now() + 60 * 60 * 1000),
+        },
+      });
+      try {
+        await sendPasswordResetEmail(normalizedEmail, token);
+      } catch (e) {
+        console.error("[mail] password reset send failed", e);
+      }
+    }
+
+    res.json({ ok: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "PASSWORD_RESET_REQUEST_FAILED" });
+  }
+});
+
+router.post("/password/reset", async (req, res) => {
+  const prisma = req.app.locals.prisma;
+  try {
+    const { email, token, password } = req.body || {};
+    const normalizedEmail = String(email || "").trim().toLowerCase();
+    const providedToken = String(token || "").trim();
+    const newPassword = String(password || "").trim();
+
+    if (!normalizedEmail || !providedToken || !newPassword) {
+      return res.status(400).json({ error: "INVALID_PARAMS" });
+    }
+    if (newPassword.length < 6) {
+      return res.status(400).json({ error: "PASSWORD_TOO_SHORT" });
+    }
+
+    const user = await prisma.user.findUnique({ where: { email: normalizedEmail } });
+    if (
+      !user ||
+      !user.passwordResetTokenHash ||
+      !user.passwordResetExpiresAt ||
+      user.passwordResetTokenHash !== sha256Hex(providedToken)
+    ) {
+      return res.status(400).json({ error: "INVALID_TOKEN" });
+    }
+    if (user.passwordResetExpiresAt < new Date()) {
+      return res.status(400).json({ error: "TOKEN_EXPIRED" });
+    }
+
+    const passwordHash = await bcrypt.hash(newPassword, 10);
+
+    const updatedUser = await prisma.user.update({
+      where: { id: user.id },
+      data: {
+        passwordHash,
+        passwordResetTokenHash: null,
+        passwordResetExpiresAt: null,
+      },
+    });
+
+    try {
+      await prisma.refreshToken.updateMany({
+        where: { userId: user.id, revokedAt: null },
+        data: { revokedAt: new Date() },
+      });
+    } catch (e) {
+      console.error("[auth] failed to revoke refresh tokens after reset", e);
+    }
+
+    req.session.user = publicUser(updatedUser);
+    const accessToken = signAccessToken(updatedUser);
+    const { token: refreshToken, jti, exp } = signRefreshToken(updatedUser);
+    try {
+      await prisma.refreshToken.create({
+        data: {
+          userId: updatedUser.id,
+          jti,
+          expiresAt: exp ? new Date(exp * 1000) : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+          createdByIp: req.ip || null,
+        },
+      });
+    } catch (e) {
+      console.error("[auth] failed to persist refresh token after reset", e);
+    }
+    setRefreshCookie(res, refreshToken);
+
+    res.json({ user: publicUser(updatedUser), accessToken });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "PASSWORD_RESET_FAILED" });
   }
 });
 
