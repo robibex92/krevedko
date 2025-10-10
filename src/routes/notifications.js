@@ -134,7 +134,9 @@ function parseAudienceFilter(input) {
   const filter = {};
   if (Array.isArray(data.roles)) {
     const roles = data.roles
-      .map((role) => (typeof role === "string" ? role.trim().toUpperCase() : null))
+      .map((role) =>
+        typeof role === "string" ? role.trim().toUpperCase() : null
+      )
       .filter(Boolean);
     if (roles.length) filter.roles = roles;
   }
@@ -191,7 +193,9 @@ function normalizeNotificationPayload(notification) {
     excerpt: notification.excerpt,
     bodyHtml: notification.bodyHtml,
     imagePath: notification.imagePath,
-    imageUrl: notification.imagePath ? `/uploads/${notification.imagePath}` : null,
+    imageUrl: notification.imagePath
+      ? `/uploads/${notification.imagePath}`
+      : null,
     linkUrl: notification.linkUrl,
     priority: notification.priority,
     audience: notification.audience,
@@ -207,53 +211,80 @@ function normalizeNotificationPayload(notification) {
 }
 
 async function fetchUnreadNotifications(prisma, userId) {
-  const [rawUser, notifications] = await Promise.all([
-    userId
-      ? prisma.user.findUnique({
-          where: { id: userId },
-          select: { id: true, role: true, createdAt: true, loyaltyPoints: true, _count: { select: { orders: true } } },
-        })
-      : null,
-    (async () => {
-      const query = {
-        where: { isActive: true },
-        orderBy: [{ priority: "desc" }, { publishedAt: "desc" }, { createdAt: "desc" }],
-      };
-      if (userId) {
-        query.include = { statuses: { where: { userId } } };
-      }
-      return prisma.notification.findMany(query);
-    })(),
-  ]);
-
-  const now = new Date();
-  const payload = [];
-  for (const notification of notifications) {
-    if (!isNowWithinSchedule(notification, now)) continue;
-    if (notification.audience === "CUSTOM" && !rawUser) continue;
-    if (rawUser && !matchesAudience(notification, rawUser)) continue;
-    const statuses = Array.isArray(notification.statuses) ? notification.statuses : [];
-    const status = statuses[0] || null;
-    if (userId && status) {
-      if (status.dontShowAgain) continue;
-      if (notification.showOnce && (status.status === "READ" || status.status === "DISMISSED")) {
-        continue;
-      }
-      if (status.status === "DISMISSED") continue;
+  try {
+    // Build notification query
+    const notificationQuery = {
+      where: { isActive: true },
+      orderBy: [
+        { priority: "desc" },
+        { publishedAt: "desc" },
+        { createdAt: "desc" },
+      ],
+    };
+    if (userId) {
+      notificationQuery.include = { statuses: { where: { userId } } };
     }
-    payload.push({
-      ...normalizeNotificationPayload(notification),
-      status: status
-        ? {
-            status: status.status,
-            readAt: status.readAt,
-            dismissedAt: status.dismissedAt,
-            dontShowAgain: status.dontShowAgain,
-          }
+
+    const [rawUser, notifications] = await Promise.all([
+      userId
+        ? prisma.user.findUnique({
+            where: { id: userId },
+            select: {
+              id: true,
+              role: true,
+              createdAt: true,
+              loyaltyPoints: true,
+              _count: { select: { orders: true } },
+            },
+          })
         : null,
-    });
+      prisma.notification.findMany(notificationQuery),
+    ]);
+
+    console.log(
+      "[fetchUnreadNotifications] rawUser:",
+      !!rawUser,
+      "notifications:",
+      notifications.length
+    );
+
+    const now = new Date();
+    const payload = [];
+    for (const notification of notifications) {
+      if (!isNowWithinSchedule(notification, now)) continue;
+      if (notification.audience === "CUSTOM" && !rawUser) continue;
+      if (rawUser && !matchesAudience(notification, rawUser)) continue;
+      const statuses = Array.isArray(notification.statuses)
+        ? notification.statuses
+        : [];
+      const status = statuses[0] || null;
+      if (userId && status) {
+        if (status.dontShowAgain) continue;
+        if (
+          notification.showOnce &&
+          (status.status === "READ" || status.status === "DISMISSED")
+        ) {
+          continue;
+        }
+        if (status.status === "DISMISSED") continue;
+      }
+      payload.push({
+        ...normalizeNotificationPayload(notification),
+        status: status
+          ? {
+              status: status.status,
+              readAt: status.readAt,
+              dismissedAt: status.dismissedAt,
+              dontShowAgain: status.dontShowAgain,
+            }
+          : null,
+      });
+    }
+    return payload;
+  } catch (error) {
+    console.error("[fetchUnreadNotifications] ERROR:", error);
+    throw error;
   }
-  return payload;
 }
 
 async function fetchHistoryNotifications(prisma, userId) {
@@ -283,7 +314,10 @@ async function fetchHistoryNotifications(prisma, userId) {
 
 router.get("/notifications/unread", requireAuth, async (req, res) => {
   const prisma = req.app.locals.prisma;
-  const userId = req.session.user.id;
+  const userId = req.session?.user?.id;
+  if (!userId) {
+    return res.status(401).json({ error: "UNAUTHORIZED" });
+  }
   try {
     const payload = await fetchUnreadNotifications(prisma, userId);
     res.json({ notifications: payload });
@@ -295,7 +329,10 @@ router.get("/notifications/unread", requireAuth, async (req, res) => {
 
 router.get("/notifications/history", requireAuth, async (req, res) => {
   const prisma = req.app.locals.prisma;
-  const userId = req.session.user.id;
+  const userId = req.session?.user?.id;
+  if (!userId) {
+    return res.status(401).json({ error: "UNAUTHORIZED" });
+  }
   try {
     const payload = await fetchHistoryNotifications(prisma, userId);
     res.json({ notifications: payload });
@@ -307,16 +344,53 @@ router.get("/notifications/history", requireAuth, async (req, res) => {
 
 router.get("/notifications", requireAuth, async (req, res) => {
   const prisma = req.app.locals.prisma;
-  const userId = req.session.user.id;
+
+  if (!prisma) {
+    console.error(
+      "[notifications] PRISMA IS UNDEFINED! req.app:",
+      !!req.app,
+      "req.app.locals:",
+      !!req.app?.locals
+    );
+    return res.status(500).json({ error: "PRISMA_NOT_AVAILABLE" });
+  }
+
+  // Безопасное получение userId
+  const userId = req.session?.user?.id;
+  console.log(
+    "[notifications] GET /notifications - userId:",
+    userId,
+    "session:",
+    !!req.session,
+    "user:",
+    !!req.session?.user
+  );
+
+  if (!userId) {
+    console.error("[notifications] userId not found in req.session.user");
+    return res.status(401).json({ error: "UNAUTHORIZED" });
+  }
+
   try {
+    console.log("[notifications] Fetching notifications for user:", userId);
     const [unread, history] = await Promise.all([
       fetchUnreadNotifications(prisma, userId),
       fetchHistoryNotifications(prisma, userId),
     ]);
+    console.log(
+      "[notifications] Successfully fetched - unread:",
+      unread.length,
+      "history:",
+      history.length
+    );
     res.json({ unread, history });
   } catch (error) {
-    console.error("[notifications] combined fetch failed", error);
-    res.status(500).json({ error: "NOTIFICATIONS_COMBINED_FETCH_FAILED" });
+    console.error("[notifications] combined fetch failed - error:", error);
+    console.error("[notifications] error stack:", error.stack);
+    res.status(500).json({
+      error: "NOTIFICATIONS_COMBINED_FETCH_FAILED",
+      details: error.message,
+    });
   }
 });
 
@@ -333,9 +407,13 @@ router.get("/notifications/public", async (req, res) => {
 
 router.post("/notifications/:id/read", requireAuth, async (req, res) => {
   const prisma = req.app.locals.prisma;
-  const userId = req.session.user.id;
+  const userId = req.session?.user?.id;
+  if (!userId) {
+    return res.status(401).json({ error: "UNAUTHORIZED" });
+  }
   const id = Number(req.params.id);
-  if (!Number.isInteger(id)) return res.status(400).json({ error: "INVALID_ID" });
+  if (!Number.isInteger(id))
+    return res.status(400).json({ error: "INVALID_ID" });
   try {
     const now = new Date();
     const record = await prisma.userNotificationStatus.upsert({
@@ -353,12 +431,14 @@ router.post("/notifications/:id/read", requireAuth, async (req, res) => {
         dontShowAgain: false,
       },
     });
-    res.json({ status: {
-      status: record.status,
-      readAt: record.readAt,
-      dismissedAt: record.dismissedAt,
-      dontShowAgain: record.dontShowAgain,
-    } });
+    res.json({
+      status: {
+        status: record.status,
+        readAt: record.readAt,
+        dismissedAt: record.dismissedAt,
+        dontShowAgain: record.dontShowAgain,
+      },
+    });
   } catch (error) {
     console.error("[notifications] mark read failed", error);
     res.status(500).json({ error: "NOTIFICATION_MARK_READ_FAILED" });
@@ -367,9 +447,13 @@ router.post("/notifications/:id/read", requireAuth, async (req, res) => {
 
 router.post("/notifications/:id/dismiss", requireAuth, async (req, res) => {
   const prisma = req.app.locals.prisma;
-  const userId = req.session.user.id;
+  const userId = req.session?.user?.id;
+  if (!userId) {
+    return res.status(401).json({ error: "UNAUTHORIZED" });
+  }
   const id = Number(req.params.id);
-  if (!Number.isInteger(id)) return res.status(400).json({ error: "INVALID_ID" });
+  if (!Number.isInteger(id))
+    return res.status(400).json({ error: "INVALID_ID" });
   const dontShowAgain = Boolean(req.body?.dontShowAgain);
   try {
     const now = new Date();
@@ -390,12 +474,14 @@ router.post("/notifications/:id/dismiss", requireAuth, async (req, res) => {
         dontShowAgain,
       },
     });
-    res.json({ status: {
-      status: record.status,
-      readAt: record.readAt,
-      dismissedAt: record.dismissedAt,
-      dontShowAgain: record.dontShowAgain,
-    } });
+    res.json({
+      status: {
+        status: record.status,
+        readAt: record.readAt,
+        dismissedAt: record.dismissedAt,
+        dontShowAgain: record.dontShowAgain,
+      },
+    });
   } catch (error) {
     console.error("[notifications] dismiss failed", error);
     res.status(500).json({ error: "NOTIFICATION_DISMISS_FAILED" });
@@ -406,196 +492,271 @@ router.post("/notifications/:id/dismiss", requireAuth, async (req, res) => {
 // Admin CRUD APIs
 // ------------------------
 
-router.get("/admin/notifications", requireAuth, requireAdmin, async (req, res) => {
-  const prisma = req.app.locals.prisma;
-  try {
-    const notifications = await prisma.notification.findMany({
-      orderBy: [{ createdAt: "desc" }],
-    });
-    res.json({ notifications: notifications.map((n) => normalizeNotificationPayload(n)) });
-  } catch (error) {
-    console.error("[admin notifications] list failed", error);
-    res.status(500).json({ error: "ADMIN_NOTIFICATIONS_LIST_FAILED" });
-  }
-});
+router.get(
+  "/admin/notifications",
+  requireAuth,
+  requireAdmin,
+  async (req, res) => {
+    const prisma = req.app.locals.prisma;
 
-router.get("/admin/notifications/:id", requireAuth, requireAdmin, async (req, res) => {
-  const prisma = req.app.locals.prisma;
-  const id = Number(req.params.id);
-  if (!Number.isInteger(id)) return res.status(400).json({ error: "INVALID_ID" });
-  try {
-    const notification = await prisma.notification.findUnique({ where: { id } });
-    if (!notification) return res.status(404).json({ error: "NOTIFICATION_NOT_FOUND" });
-    res.json({ notification: normalizeNotificationPayload(notification) });
-  } catch (error) {
-    console.error("[admin notifications] get failed", error);
-    res.status(500).json({ error: "ADMIN_NOTIFICATION_FETCH_FAILED" });
-  }
-});
-
-router.post("/admin/notifications", requireAuth, requireAdmin, async (req, res) => {
-  const prisma = req.app.locals.prisma;
-  try {
-    const {
-      title,
-      slug,
-      excerpt,
-      bodyBbcode,
-      imagePath,
-      linkUrl,
-      priority,
-      audience,
-      audienceFilter,
-      isActive,
-      showOnce,
-      startsAt,
-      endsAt,
-      publishedAt,
-    } = req.body || {};
-
-    if (!title) return res.status(400).json({ error: "TITLE_REQUIRED" });
-    if (!bodyBbcode && bodyBbcode !== "") return res.status(400).json({ error: "BODY_REQUIRED" });
-
-    const safePriority = NOTIFICATION_PRIORITIES.has(String(priority || "").toUpperCase())
-      ? String(priority).toUpperCase()
-      : "MEDIUM";
-    const safeAudience = NOTIFICATION_AUDIENCE.has(String(audience || "").toUpperCase())
-      ? String(audience).toUpperCase()
-      : "ALL";
-
-    const safeFilter = safeAudience === "CUSTOM" ? parseAudienceFilter(audienceFilter) : null;
-    const safeSlug = await ensureNotificationSlug(prisma, slug || title);
-    const safeImagePath = sanitizeImagePath(imagePath);
-    const safeLink = sanitizeExternalLink(linkUrl);
-    const safeStartsAt = parseDate(startsAt);
-    const safeEndsAt = parseDate(endsAt);
-    const safePublishedAt = parseDate(publishedAt);
-    const safeIsActive = parseBooleanFlag(isActive, true);
-    const safeShowOnce = parseBooleanFlag(showOnce, false);
-
-    const html = bbcodeToHtml(bodyBbcode || "");
-    const textExcerpt = excerpt && String(excerpt).trim()
-      ? String(excerpt).trim()
-      : bbcodeToText(bodyBbcode || "").slice(0, 280);
-
-    const created = await prisma.notification.create({
-      data: {
-        slug: safeSlug,
-        title: String(title).trim(),
-        excerpt: textExcerpt || null,
-        bodyBbcode: bodyBbcode || "",
-        bodyHtml: html,
-        imagePath: safeImagePath,
-        linkUrl: safeLink,
-        priority: safePriority,
-        audience: safeAudience,
-        audienceFilter: safeFilter,
-        isActive: safeIsActive,
-        showOnce: safeShowOnce,
-        startsAt: safeStartsAt,
-        endsAt: safeEndsAt,
-        publishedAt: safePublishedAt || (safeIsActive ? new Date() : null),
-      },
-    });
-
-    res.status(201).json({ notification: normalizeNotificationPayload(created) });
-  } catch (error) {
-    console.error("[admin notifications] create failed", error);
-    const message = error?.message || "ADMIN_NOTIFICATION_CREATE_FAILED";
-    res.status(500).json({ error: "ADMIN_NOTIFICATION_CREATE_FAILED", message });
-  }
-});
-
-router.patch("/admin/notifications/:id", requireAuth, requireAdmin, async (req, res) => {
-  const prisma = req.app.locals.prisma;
-  const id = Number(req.params.id);
-  if (!Number.isInteger(id)) return res.status(400).json({ error: "INVALID_ID" });
-  try {
-    const existing = await prisma.notification.findUnique({ where: { id } });
-    if (!existing) return res.status(404).json({ error: "NOTIFICATION_NOT_FOUND" });
-
-    const {
-      title,
-      slug,
-      excerpt,
-      bodyBbcode,
-      imagePath,
-      linkUrl,
-      priority,
-      audience,
-      audienceFilter,
-      isActive,
-      showOnce,
-      startsAt,
-      endsAt,
-      publishedAt,
-    } = req.body || {};
-
-    const data = {};
-    if (title !== undefined) data.title = String(title).trim();
-    if (slug !== undefined) data.slug = await ensureNotificationSlug(prisma, slug || title || existing.title, id);
-    if (excerpt !== undefined) {
-      const trimmed = String(excerpt || "").trim();
-      data.excerpt = trimmed || null;
+    if (!prisma) {
+      console.error("[admin notifications] PRISMA IS UNDEFINED!");
+      return res.status(500).json({ error: "PRISMA_NOT_AVAILABLE" });
     }
-    if (bodyBbcode !== undefined) {
-      const source = bodyBbcode || "";
-      data.bodyBbcode = source;
-      data.bodyHtml = bbcodeToHtml(source);
-      if (excerpt === undefined) {
-        const textExcerpt = bbcodeToText(source).slice(0, 280);
-        data.excerpt = textExcerpt || existing.excerpt;
-      }
+
+    try {
+      const notifications = await prisma.notification.findMany({
+        orderBy: [{ createdAt: "desc" }],
+      });
+      res.json({
+        notifications: notifications.map((n) =>
+          normalizeNotificationPayload(n)
+        ),
+      });
+    } catch (error) {
+      console.error("[admin notifications] list failed", error);
+      res.status(500).json({ error: "ADMIN_NOTIFICATIONS_LIST_FAILED" });
     }
-    if (imagePath !== undefined) data.imagePath = sanitizeImagePath(imagePath);
-    if (linkUrl !== undefined) data.linkUrl = sanitizeExternalLink(linkUrl);
-    if (priority !== undefined) {
-      const safePriority = NOTIFICATION_PRIORITIES.has(String(priority || "").toUpperCase())
+  }
+);
+
+router.get(
+  "/admin/notifications/:id",
+  requireAuth,
+  requireAdmin,
+  async (req, res) => {
+    const prisma = req.app.locals.prisma;
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id))
+      return res.status(400).json({ error: "INVALID_ID" });
+    try {
+      const notification = await prisma.notification.findUnique({
+        where: { id },
+      });
+      if (!notification)
+        return res.status(404).json({ error: "NOTIFICATION_NOT_FOUND" });
+      res.json({ notification: normalizeNotificationPayload(notification) });
+    } catch (error) {
+      console.error("[admin notifications] get failed", error);
+      res.status(500).json({ error: "ADMIN_NOTIFICATION_FETCH_FAILED" });
+    }
+  }
+);
+
+router.post(
+  "/admin/notifications",
+  requireAuth,
+  requireAdmin,
+  async (req, res) => {
+    const prisma = req.app.locals.prisma;
+    try {
+      const {
+        title,
+        slug,
+        excerpt,
+        bodyBbcode,
+        imagePath,
+        linkUrl,
+        priority,
+        audience,
+        audienceFilter,
+        isActive,
+        showOnce,
+        startsAt,
+        endsAt,
+        publishedAt,
+      } = req.body || {};
+
+      if (!title) return res.status(400).json({ error: "TITLE_REQUIRED" });
+      if (!bodyBbcode && bodyBbcode !== "")
+        return res.status(400).json({ error: "BODY_REQUIRED" });
+
+      const safePriority = NOTIFICATION_PRIORITIES.has(
+        String(priority || "").toUpperCase()
+      )
         ? String(priority).toUpperCase()
-        : existing.priority;
-      data.priority = safePriority;
-    }
-    if (audience !== undefined) {
-      const safeAudience = NOTIFICATION_AUDIENCE.has(String(audience || "").toUpperCase())
+        : "MEDIUM";
+      const safeAudience = NOTIFICATION_AUDIENCE.has(
+        String(audience || "").toUpperCase()
+      )
         ? String(audience).toUpperCase()
-        : existing.audience;
-      data.audience = safeAudience;
-      const filter = safeAudience === "CUSTOM" ? parseAudienceFilter(audienceFilter ?? existing.audienceFilter) : null;
-      data.audienceFilter = filter;
-    } else if (audienceFilter !== undefined && existing.audience === "CUSTOM") {
-      data.audienceFilter = parseAudienceFilter(audienceFilter);
+        : "ALL";
+
+      const safeFilter =
+        safeAudience === "CUSTOM" ? parseAudienceFilter(audienceFilter) : null;
+      const safeSlug = await ensureNotificationSlug(prisma, slug || title);
+      const safeImagePath = sanitizeImagePath(imagePath);
+      const safeLink = sanitizeExternalLink(linkUrl);
+      const safeStartsAt = parseDate(startsAt);
+      const safeEndsAt = parseDate(endsAt);
+      const safePublishedAt = parseDate(publishedAt);
+      const safeIsActive = parseBooleanFlag(isActive, true);
+      const safeShowOnce = parseBooleanFlag(showOnce, false);
+
+      const html = bbcodeToHtml(bodyBbcode || "");
+      const textExcerpt =
+        excerpt && String(excerpt).trim()
+          ? String(excerpt).trim()
+          : bbcodeToText(bodyBbcode || "").slice(0, 280);
+
+      const created = await prisma.notification.create({
+        data: {
+          slug: safeSlug,
+          title: String(title).trim(),
+          excerpt: textExcerpt || null,
+          bodyBbcode: bodyBbcode || "",
+          bodyHtml: html,
+          imagePath: safeImagePath,
+          linkUrl: safeLink,
+          priority: safePriority,
+          audience: safeAudience,
+          audienceFilter: safeFilter,
+          isActive: safeIsActive,
+          showOnce: safeShowOnce,
+          startsAt: safeStartsAt,
+          endsAt: safeEndsAt,
+          publishedAt: safePublishedAt || (safeIsActive ? new Date() : null),
+        },
+      });
+
+      res
+        .status(201)
+        .json({ notification: normalizeNotificationPayload(created) });
+    } catch (error) {
+      console.error("[admin notifications] create failed", error);
+      const message = error?.message || "ADMIN_NOTIFICATION_CREATE_FAILED";
+      res
+        .status(500)
+        .json({ error: "ADMIN_NOTIFICATION_CREATE_FAILED", message });
     }
-    if (isActive !== undefined) data.isActive = parseBooleanFlag(isActive, existing.isActive);
-    if (showOnce !== undefined) data.showOnce = parseBooleanFlag(showOnce, existing.showOnce);
-    if (startsAt !== undefined) data.startsAt = parseDate(startsAt);
-    if (endsAt !== undefined) data.endsAt = parseDate(endsAt);
-    if (publishedAt !== undefined) data.publishedAt = parseDate(publishedAt);
-
-    const updated = await prisma.notification.update({
-      where: { id },
-      data,
-    });
-    res.json({ notification: normalizeNotificationPayload(updated) });
-  } catch (error) {
-    console.error("[admin notifications] update failed", error);
-    const message = error?.message || "ADMIN_NOTIFICATION_UPDATE_FAILED";
-    res.status(500).json({ error: "ADMIN_NOTIFICATION_UPDATE_FAILED", message });
   }
-});
+);
 
-router.delete("/admin/notifications/:id", requireAuth, requireAdmin, async (req, res) => {
-  const prisma = req.app.locals.prisma;
-  const id = Number(req.params.id);
-  if (!Number.isInteger(id)) return res.status(400).json({ error: "INVALID_ID" });
-  try {
-    await prisma.userNotificationStatus.deleteMany({ where: { notificationId: id } });
-    await prisma.notification.delete({ where: { id } });
-    res.json({ ok: true });
-  } catch (error) {
-    console.error("[admin notifications] delete failed", error);
-    res.status(500).json({ error: "ADMIN_NOTIFICATION_DELETE_FAILED" });
+router.patch(
+  "/admin/notifications/:id",
+  requireAuth,
+  requireAdmin,
+  async (req, res) => {
+    const prisma = req.app.locals.prisma;
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id))
+      return res.status(400).json({ error: "INVALID_ID" });
+    try {
+      const existing = await prisma.notification.findUnique({ where: { id } });
+      if (!existing)
+        return res.status(404).json({ error: "NOTIFICATION_NOT_FOUND" });
+
+      const {
+        title,
+        slug,
+        excerpt,
+        bodyBbcode,
+        imagePath,
+        linkUrl,
+        priority,
+        audience,
+        audienceFilter,
+        isActive,
+        showOnce,
+        startsAt,
+        endsAt,
+        publishedAt,
+      } = req.body || {};
+
+      const data = {};
+      if (title !== undefined) data.title = String(title).trim();
+      if (slug !== undefined)
+        data.slug = await ensureNotificationSlug(
+          prisma,
+          slug || title || existing.title,
+          id
+        );
+      if (excerpt !== undefined) {
+        const trimmed = String(excerpt || "").trim();
+        data.excerpt = trimmed || null;
+      }
+      if (bodyBbcode !== undefined) {
+        const source = bodyBbcode || "";
+        data.bodyBbcode = source;
+        data.bodyHtml = bbcodeToHtml(source);
+        if (excerpt === undefined) {
+          const textExcerpt = bbcodeToText(source).slice(0, 280);
+          data.excerpt = textExcerpt || existing.excerpt;
+        }
+      }
+      if (imagePath !== undefined)
+        data.imagePath = sanitizeImagePath(imagePath);
+      if (linkUrl !== undefined) data.linkUrl = sanitizeExternalLink(linkUrl);
+      if (priority !== undefined) {
+        const safePriority = NOTIFICATION_PRIORITIES.has(
+          String(priority || "").toUpperCase()
+        )
+          ? String(priority).toUpperCase()
+          : existing.priority;
+        data.priority = safePriority;
+      }
+      if (audience !== undefined) {
+        const safeAudience = NOTIFICATION_AUDIENCE.has(
+          String(audience || "").toUpperCase()
+        )
+          ? String(audience).toUpperCase()
+          : existing.audience;
+        data.audience = safeAudience;
+        const filter =
+          safeAudience === "CUSTOM"
+            ? parseAudienceFilter(audienceFilter ?? existing.audienceFilter)
+            : null;
+        data.audienceFilter = filter;
+      } else if (
+        audienceFilter !== undefined &&
+        existing.audience === "CUSTOM"
+      ) {
+        data.audienceFilter = parseAudienceFilter(audienceFilter);
+      }
+      if (isActive !== undefined)
+        data.isActive = parseBooleanFlag(isActive, existing.isActive);
+      if (showOnce !== undefined)
+        data.showOnce = parseBooleanFlag(showOnce, existing.showOnce);
+      if (startsAt !== undefined) data.startsAt = parseDate(startsAt);
+      if (endsAt !== undefined) data.endsAt = parseDate(endsAt);
+      if (publishedAt !== undefined) data.publishedAt = parseDate(publishedAt);
+
+      const updated = await prisma.notification.update({
+        where: { id },
+        data,
+      });
+      res.json({ notification: normalizeNotificationPayload(updated) });
+    } catch (error) {
+      console.error("[admin notifications] update failed", error);
+      const message = error?.message || "ADMIN_NOTIFICATION_UPDATE_FAILED";
+      res
+        .status(500)
+        .json({ error: "ADMIN_NOTIFICATION_UPDATE_FAILED", message });
+    }
   }
-});
+);
+
+router.delete(
+  "/admin/notifications/:id",
+  requireAuth,
+  requireAdmin,
+  async (req, res) => {
+    const prisma = req.app.locals.prisma;
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id))
+      return res.status(400).json({ error: "INVALID_ID" });
+    try {
+      await prisma.userNotificationStatus.deleteMany({
+        where: { notificationId: id },
+      });
+      await prisma.notification.delete({ where: { id } });
+      res.json({ ok: true });
+    } catch (error) {
+      console.error("[admin notifications] delete failed", error);
+      res.status(500).json({ error: "ADMIN_NOTIFICATION_DELETE_FAILED" });
+    }
+  }
+);
 
 router.post(
   "/admin/notifications/upload",

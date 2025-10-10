@@ -1,24 +1,60 @@
 import crypto from "crypto";
 import jwt from "jsonwebtoken";
 
-const {
-  JWT_ACCESS_SECRET = "dev_access_secret_change_me",
-  JWT_REFRESH_SECRET = "dev_refresh_secret_change_me",
-  JWT_ACCESS_TTL = "24h",
-  JWT_REFRESH_TTL = "30d",
-  NODE_ENV = "development",
-} = process.env;
+// ИСПРАВЛЕНИЕ MEDIUM-1: Валидация JWT secrets
+const JWT_ACCESS_SECRET =
+  process.env.JWT_ACCESS_SECRET || "dev_access_secret_change_me";
+const JWT_REFRESH_SECRET =
+  process.env.JWT_REFRESH_SECRET || "dev_refresh_secret_change_me";
+const JWT_ACCESS_TTL = process.env.JWT_ACCESS_TTL || "24h"; // 24 часа - удобнее для пользователей
+const JWT_REFRESH_TTL = process.env.JWT_REFRESH_TTL || "30d";
+const NODE_ENV = process.env.NODE_ENV || "development";
+
+// Проверка секретов в production
+if (NODE_ENV === "production") {
+  if (JWT_ACCESS_SECRET === "dev_access_secret_change_me") {
+    throw new Error(
+      "❌ SECURITY: JWT_ACCESS_SECRET must be set in production!"
+    );
+  }
+  if (JWT_REFRESH_SECRET === "dev_refresh_secret_change_me") {
+    throw new Error(
+      "❌ SECURITY: JWT_REFRESH_SECRET must be set in production!"
+    );
+  }
+  if (JWT_ACCESS_SECRET.length < 32) {
+    throw new Error(
+      "❌ SECURITY: JWT_ACCESS_SECRET must be at least 32 characters!"
+    );
+  }
+  if (JWT_REFRESH_SECRET.length < 32) {
+    throw new Error(
+      "❌ SECURITY: JWT_REFRESH_SECRET must be at least 32 characters!"
+    );
+  }
+} else {
+  if (JWT_ACCESS_SECRET === "dev_access_secret_change_me") {
+    console.warn(
+      "⚠️  WARNING: Using default JWT_ACCESS_SECRET - unsafe for production!"
+    );
+  }
+  if (JWT_REFRESH_SECRET === "dev_refresh_secret_change_me") {
+    console.warn(
+      "⚠️  WARNING: Using default JWT_REFRESH_SECRET - unsafe for production!"
+    );
+  }
+}
 const COOKIE_BASE_PATH = (process.env.COOKIE_BASE_PATH || "").replace(
   /\/$/,
   ""
 ); // e.g. "/api-v3"
 const REFRESH_COOKIE_PATH = `${COOKIE_BASE_PATH}/api/auth` || "/api/auth";
 
+// ИСПРАВЛЕНИЕ MEDIUM-3: Строгая валидация userId
 function resolveUserId(sub) {
-  if (typeof sub === "number" && Number.isInteger(sub)) return sub;
-  if (typeof sub === "string" && /^[0-9]+$/.test(sub)) {
-    const parsed = Number.parseInt(sub, 10);
-    if (Number.isInteger(parsed)) return parsed;
+  // JWT payload.sub всегда должен быть числом (integer > 0)
+  if (typeof sub === "number" && Number.isInteger(sub) && sub > 0) {
+    return sub;
   }
   return null;
 }

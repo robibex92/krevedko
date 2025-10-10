@@ -96,13 +96,15 @@ const successPage = (redirectUrl, seconds) => `
       </script>
     </head>
     <body>
-      <div class="card">
-        <div class="icon">✅</div>
+      <div className="card">
+        <div className="icon">✅</div>
         <h1>Email подтверждён</h1>
         <p>Вы молодец 😎 Сейчас вернём вас на сайт.</p>
-        <p>Перенос через <span class="countdown" id="seconds">${seconds}</span> сек.</p>
+        <p>Перенос через <span className="countdown" id="seconds">${seconds}</span> сек.</p>
         <p>Если не хотите ждать — нажмите на кнопку ниже.</p>
-        <a class="button" href="${htmlEscape(redirectUrl)}">Вернуться на сайт</a>
+        <a className="button" href="${htmlEscape(
+          redirectUrl
+        )}">Вернуться на сайт</a>
       </div>
     </body>
   </html>
@@ -143,7 +145,7 @@ const errorPage = (message) => `
       </style>
     </head>
     <body>
-      <div class="card">
+      <div className="card">
         <h1>🥲 Ой!</h1>
         <p>${htmlEscape(message)}</p>
       </div>
@@ -160,7 +162,9 @@ router.get("/verify-email", async (req, res) => {
   }
 
   const token = String(req.query.token || "").trim();
-  const email = String(req.query.email || "").trim().toLowerCase();
+  const email = String(req.query.email || "")
+    .trim()
+    .toLowerCase();
 
   if (!token || !email) {
     return res

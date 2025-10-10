@@ -1,12 +1,17 @@
 import { Router } from "express";
 import { requireAuth, requireAdmin } from "../middleware/auth.js";
-import { productUpload, paymentUpload, recipesUpload } from "../services/uploads.js";
+import {
+  productUpload,
+  paymentUpload,
+  recipesUpload,
+} from "../services/uploads.js";
 import { clearCache } from "../services/cache.js";
 import { makeOrderNumber } from "../services/pricing.js";
 import {
   buildTelegramMessage,
   sendTelegramMessage,
 } from "../services/telegram.js";
+import { getMailer } from "../services/mailer.js";
 import { getAnalyticsData } from "../services/analytics.js";
 import {
   ensureRecipeSlug,
@@ -47,24 +52,19 @@ router.post(
   }
 );
 
-router.get(
-  "/admin/recipes",
-  requireAuth,
-  requireAdmin,
-  async (req, res) => {
-    const prisma = req.app.locals.prisma;
-    try {
-      const recipes = await prisma.recipe.findMany({
-        include: recipeAuthorInclude,
-        orderBy: { createdAt: "desc" },
-      });
-      res.json({ recipes: recipes.map((recipe) => toRecipeSummary(recipe)) });
-    } catch (error) {
-      console.error(error);
-      res.status(500).json({ error: "ADMIN_RECIPES_FETCH_FAILED" });
-    }
+router.get("/admin/recipes", requireAuth, requireAdmin, async (req, res) => {
+  const prisma = req.app.locals.prisma;
+  try {
+    const recipes = await prisma.recipe.findMany({
+      include: recipeAuthorInclude,
+      orderBy: { createdAt: "desc" },
+    });
+    res.json({ recipes: recipes.map((recipe) => toRecipeSummary(recipe)) });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "ADMIN_RECIPES_FETCH_FAILED" });
   }
-);
+});
 
 router.get(
   "/admin/recipes/:id",
@@ -90,64 +90,52 @@ router.get(
   }
 );
 
-router.post(
-  "/admin/recipes",
-  requireAuth,
-  requireAdmin,
-  async (req, res) => {
-    const prisma = req.app.locals.prisma;
-    try {
-      const {
-        title,
-        content,
-        status,
-        excerpt,
-        coverImagePath,
-        publish,
-        slug,
-      } = req.body || {};
-      if (!title) return res.status(400).json({ error: "TITLE_REQUIRED" });
-      if (status && !["DRAFT", "PUBLISHED"].includes(status)) {
-        return res.status(400).json({ error: "INVALID_STATUS" });
-      }
-      const normalizedContent = normalizeRecipeContent(content);
-      const now = new Date();
-      const effectiveStatus = publish ? "PUBLISHED" : status || "DRAFT";
-      const authorId = req.session.user.id;
-      const finalSlug = await ensureRecipeSlug(prisma, slug || title);
-      const created = await prisma.recipe.create({
-        data: {
-          title,
-          content: normalizedContent,
-          status: effectiveStatus,
-          excerpt: excerpt ?? null,
-          coverImagePath: coverImagePath ?? null,
-          publishedAt: effectiveStatus === "PUBLISHED" ? now : null,
-          authorId,
-          slug: finalSlug,
-        },
-        include: recipeAuthorInclude,
-      });
-      
-      // Отправляем в телеграм, если рецепт опубликован
-      if (effectiveStatus === "PUBLISHED") {
-        try {
-          await enqueueMessage(prisma, "recipe", {
-            recipeId: created.id,
-          });
-        } catch (error) {
-          console.error("Failed to enqueue recipe message:", error);
-        }
-      }
-      
-      res.status(201).json({ recipe: toRecipeDetail(created) });
-    } catch (error) {
-      console.error(error);
-      const message = error?.message || "ADMIN_RECIPE_CREATE_FAILED";
-      res.status(500).json({ error: "ADMIN_RECIPE_CREATE_FAILED", message });
+router.post("/admin/recipes", requireAuth, requireAdmin, async (req, res) => {
+  const prisma = req.app.locals.prisma;
+  try {
+    const { title, content, status, excerpt, coverImagePath, publish, slug } =
+      req.body || {};
+    if (!title) return res.status(400).json({ error: "TITLE_REQUIRED" });
+    if (status && !["DRAFT", "PUBLISHED"].includes(status)) {
+      return res.status(400).json({ error: "INVALID_STATUS" });
     }
+    const normalizedContent = normalizeRecipeContent(content);
+    const now = new Date();
+    const effectiveStatus = publish ? "PUBLISHED" : status || "DRAFT";
+    const authorId = req.session.user.id;
+    const finalSlug = await ensureRecipeSlug(prisma, slug || title);
+    const created = await prisma.recipe.create({
+      data: {
+        title,
+        content: normalizedContent,
+        status: effectiveStatus,
+        excerpt: excerpt ?? null,
+        coverImagePath: coverImagePath ?? null,
+        publishedAt: effectiveStatus === "PUBLISHED" ? now : null,
+        authorId,
+        slug: finalSlug,
+      },
+      include: recipeAuthorInclude,
+    });
+
+    // Отправляем в телеграм, если рецепт опубликован
+    if (effectiveStatus === "PUBLISHED") {
+      try {
+        await enqueueMessage(prisma, "recipe", {
+          recipeId: created.id,
+        });
+      } catch (error) {
+        console.error("Failed to enqueue recipe message:", error);
+      }
+    }
+
+    res.status(201).json({ recipe: toRecipeDetail(created) });
+  } catch (error) {
+    console.error(error);
+    const message = error?.message || "ADMIN_RECIPE_CREATE_FAILED";
+    res.status(500).json({ error: "ADMIN_RECIPE_CREATE_FAILED", message });
   }
-);
+});
 
 router.patch(
   "/admin/recipes/:id",
@@ -163,15 +151,8 @@ router.patch(
       const existing = await prisma.recipe.findUnique({ where: { id } });
       if (!existing) return res.status(404).json({ error: "RECIPE_NOT_FOUND" });
 
-      const {
-        title,
-        content,
-        status,
-        excerpt,
-        coverImagePath,
-        publish,
-        slug,
-      } = req.body || {};
+      const { title, content, status, excerpt, coverImagePath, publish, slug } =
+        req.body || {};
 
       if (status && !["DRAFT", "PUBLISHED"].includes(status)) {
         return res.status(400).json({ error: "INVALID_STATUS" });
@@ -182,8 +163,7 @@ router.patch(
       if (excerpt !== undefined) data.excerpt = excerpt ?? null;
       if (coverImagePath !== undefined)
         data.coverImagePath = coverImagePath ?? null;
-      if (content !== undefined)
-        data.content = normalizeRecipeContent(content);
+      if (content !== undefined) data.content = normalizeRecipeContent(content);
 
       let nextStatus = existing.status;
       if (publish === true) {
@@ -199,7 +179,11 @@ router.patch(
       }
 
       if (slug !== undefined) {
-        data.slug = await ensureRecipeSlug(prisma, slug || title || existing.title, id);
+        data.slug = await ensureRecipeSlug(
+          prisma,
+          slug || title || existing.title,
+          id
+        );
       }
 
       const updated = await prisma.recipe.update({
@@ -207,7 +191,7 @@ router.patch(
         data,
         include: recipeAuthorInclude,
       });
-      
+
       // Отправляем в телеграм, если рецепт был опубликован впервые
       if (nextStatus === "PUBLISHED" && !existing.publishedAt) {
         try {
@@ -218,7 +202,7 @@ router.patch(
           console.error("Failed to enqueue recipe message:", error);
         }
       }
-      
+
       res.json({ recipe: toRecipeDetail(updated) });
     } catch (error) {
       console.error(error);
@@ -335,84 +319,106 @@ router.get("/admin/categories", requireAuth, requireAdmin, async (req, res) => {
   }
 });
 
-router.post("/admin/categories", requireAuth, requireAdmin, async (req, res) => {
-  const prisma = req.app.locals.prisma;
-  try {
-    const { name, telegramChatId, telegramThreadId } = req.body || {};
-    if (!name || !telegramChatId) {
-      return res.status(400).json({ error: "REQUIRED_FIELDS_MISSING" });
+router.post(
+  "/admin/categories",
+  requireAuth,
+  requireAdmin,
+  async (req, res) => {
+    const prisma = req.app.locals.prisma;
+    try {
+      const { name, telegramChatId, telegramThreadId } = req.body || {};
+      if (!name || !telegramChatId) {
+        return res.status(400).json({ error: "REQUIRED_FIELDS_MISSING" });
+      }
+      const category = await prisma.category.create({
+        data: {
+          name,
+          telegramChatId,
+          telegramThreadId: telegramThreadId || null,
+        },
+      });
+      res.status(201).json({ category });
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ error: "CATEGORY_CREATE_FAILED" });
     }
-    const category = await prisma.category.create({
-      data: {
-        name,
-        telegramChatId,
-        telegramThreadId: telegramThreadId || null,
-      },
-    });
-    res.status(201).json({ category });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "CATEGORY_CREATE_FAILED" });
   }
-});
+);
 
-router.patch("/admin/categories/:id", requireAuth, requireAdmin, async (req, res) => {
-  const prisma = req.app.locals.prisma;
-  try {
-    const id = Number(req.params.id);
-    const { name, telegramChatId, telegramThreadId, isActive } = req.body || {};
-    const data = {};
-    if (name !== undefined) data.name = name;
-    if (telegramChatId !== undefined) data.telegramChatId = telegramChatId;
-    if (telegramThreadId !== undefined) data.telegramThreadId = telegramThreadId || null;
-    if (isActive !== undefined) data.isActive = Boolean(isActive);
-    const category = await prisma.category.update({ where: { id }, data });
-    res.json({ category });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "CATEGORY_UPDATE_FAILED" });
+router.patch(
+  "/admin/categories/:id",
+  requireAuth,
+  requireAdmin,
+  async (req, res) => {
+    const prisma = req.app.locals.prisma;
+    try {
+      const id = Number(req.params.id);
+      const { name, telegramChatId, telegramThreadId, isActive } =
+        req.body || {};
+      const data = {};
+      if (name !== undefined) data.name = name;
+      if (telegramChatId !== undefined) data.telegramChatId = telegramChatId;
+      if (telegramThreadId !== undefined)
+        data.telegramThreadId = telegramThreadId || null;
+      if (isActive !== undefined) data.isActive = Boolean(isActive);
+      const category = await prisma.category.update({ where: { id }, data });
+      res.json({ category });
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ error: "CATEGORY_UPDATE_FAILED" });
+    }
   }
-});
+);
 
 // Telegram settings
-router.get("/admin/telegram-settings", requireAuth, requireAdmin, async (req, res) => {
-  const prisma = req.app.locals.prisma;
-  try {
-    const settings = await prisma.telegramSettings.findMany({
-      orderBy: { key: "asc" },
-    });
-    res.json({ settings });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "TELEGRAM_SETTINGS_FETCH_FAILED" });
+router.get(
+  "/admin/telegram-settings",
+  requireAuth,
+  requireAdmin,
+  async (req, res) => {
+    const prisma = req.app.locals.prisma;
+    try {
+      const settings = await prisma.telegramSettings.findMany({
+        orderBy: { key: "asc" },
+      });
+      res.json({ settings });
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ error: "TELEGRAM_SETTINGS_FETCH_FAILED" });
+    }
   }
-});
+);
 
-router.put("/admin/telegram-settings/:key", requireAuth, requireAdmin, async (req, res) => {
-  const prisma = req.app.locals.prisma;
-  try {
-    const { key } = req.params;
-    const { chatId, threadId, description } = req.body || {};
-    const setting = await prisma.telegramSettings.upsert({
-      where: { key },
-      update: {
-        chatId: chatId || null,
-        threadId: threadId || null,
-        description: description || null,
-      },
-      create: {
-        key,
-        chatId: chatId || null,
-        threadId: threadId || null,
-        description: description || null,
-      },
-    });
-    res.json({ setting });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "TELEGRAM_SETTINGS_UPDATE_FAILED" });
+router.put(
+  "/admin/telegram-settings/:key",
+  requireAuth,
+  requireAdmin,
+  async (req, res) => {
+    const prisma = req.app.locals.prisma;
+    try {
+      const { key } = req.params;
+      const { chatId, threadId, description } = req.body || {};
+      const setting = await prisma.telegramSettings.upsert({
+        where: { key },
+        update: {
+          chatId: chatId || null,
+          threadId: threadId || null,
+          description: description || null,
+        },
+        create: {
+          key,
+          chatId: chatId || null,
+          threadId: threadId || null,
+          description: description || null,
+        },
+      });
+      res.json({ setting });
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ error: "TELEGRAM_SETTINGS_UPDATE_FAILED" });
+    }
   }
-});
+);
 
 // Products admin
 router.get("/admin/products", requireAuth, requireAdmin, async (req, res) => {
@@ -472,7 +478,7 @@ router.post("/admin/products", requireAuth, requireAdmin, async (req, res) => {
     });
     clearCache("products");
     clearCache("favorites:");
-    
+
     // Отправляем в телеграм, если товар активен и указана категория
     if (p.isActive && p.category) {
       try {
@@ -490,7 +496,7 @@ router.post("/admin/products", requireAuth, requireAdmin, async (req, res) => {
         // Не возвращаем ошибку, товар уже создан
       }
     }
-    
+
     // Добавляем в чат быстрых продаж, если можно забрать сейчас
     if (p.isActive && p.canPickupNow) {
       try {
@@ -501,7 +507,7 @@ router.post("/admin/products", requireAuth, requireAdmin, async (req, res) => {
         console.error("Failed to enqueue quick pickup message:", error);
       }
     }
-    
+
     res.status(201).json({ product: p });
   } catch (err) {
     console.error(err);
@@ -517,11 +523,13 @@ router.patch(
     const prisma = req.app.locals.prisma;
     try {
       const productId = Number(req.params.id);
-      const existing = await prisma.product.findUnique({ where: { id: productId } });
+      const existing = await prisma.product.findUnique({
+        where: { id: productId },
+      });
       if (!existing) {
         return res.status(404).json({ error: "PRODUCT_NOT_FOUND" });
       }
-      
+
       const { stockQuantity, minStock } = req.body || {};
       if (stockQuantity === undefined && minStock === undefined) {
         return res.status(400).json({ error: "NO_STOCK_DATA" });
@@ -534,7 +542,7 @@ router.patch(
         where: { id: productId },
         data,
       });
-      
+
       res.json({ product });
     } catch (err) {
       console.error(err);
@@ -585,7 +593,7 @@ router.patch(
       if (!existing) {
         return res.status(404).json({ error: "PRODUCT_NOT_FOUND" });
       }
-      
+
       const {
         title,
         description,
@@ -624,18 +632,18 @@ router.patch(
       const p = await prisma.product.update({ where: { id }, data });
       clearCache("products");
       clearCache("favorites:");
-      
+
       // Обновляем сообщения в телеграм
       try {
         const wasActive = existing.isActive;
         const nowActive = p.isActive;
-        
+
         // Если товар стал неактивным
         if (wasActive && !nowActive) {
           await enqueueMessage(prisma, "product_remove", {
             productId: p.id,
           });
-        } 
+        }
         // Если товар активен, обновляем сообщения
         else if (nowActive && p.category) {
           const dbCategory = await prisma.category.findFirst({
@@ -648,11 +656,11 @@ router.patch(
             });
           }
         }
-        
+
         // Управление чатом быстрых продаж
         const wasQuickPickup = existing.canPickupNow;
         const nowQuickPickup = p.canPickupNow;
-        
+
         if (nowActive && nowQuickPickup && !wasQuickPickup) {
           // Добавляем в чат быстрых продаж
           await enqueueMessage(prisma, "quick_pickup_add", {
@@ -667,7 +675,7 @@ router.patch(
       } catch (error) {
         console.error("Failed to enqueue product update message:", error);
       }
-      
+
       res.json({ product: p });
     } catch (err) {
       console.error(err);
@@ -868,21 +876,21 @@ router.patch(
       const { status } = req.body || {};
       if (!["SUBMITTED", "PAID", "CANCELLED"].includes(status))
         return res.status(400).json({ error: "INVALID_STATUS" });
-      
+
       const existingOrder = await prisma.order.findUnique({
         where: { id },
         include: { items: true },
       });
-      
+
       if (!existingOrder) {
         return res.status(404).json({ error: "ORDER_NOT_FOUND" });
       }
-      
+
       const order = await prisma.order.update({
         where: { id },
         data: { status },
       });
-      
+
       // Если заказ отменяется - возвращаем остатки
       if (status === "CANCELLED" && existingOrder.status !== "CANCELLED") {
         try {
@@ -895,7 +903,7 @@ router.patch(
               const currentStock = dec(product.stockQuantity);
               const returnedQty = dec(item.quantityDecimal);
               const newStock = currentStock.add(returnedQty);
-              
+
               await prisma.product.update({
                 where: { id: product.id },
                 data: { stockQuantity: newStock.toString() },
@@ -907,7 +915,7 @@ router.patch(
           // Не возвращаем ошибку, заказ уже отменен
         }
       }
-      
+
       res.json({ order });
     } catch (err) {
       console.error(err);
@@ -966,12 +974,86 @@ router.post(
   }
 );
 
+// Broadcast preview - получить список получателей без отправки
+router.post(
+  "/admin/broadcast/preview",
+  requireAuth,
+  requireAdmin,
+  async (req, res) => {
+    const prisma = req.app.locals.prisma;
+    try {
+      const { filters = {} } = req.body || {};
+
+      const roles = Array.isArray(filters.roles)
+        ? filters.roles.filter((r) => typeof r === "string" && r.trim())
+        : [];
+      const statuses = Array.isArray(filters.statuses)
+        ? filters.statuses.filter((s) => typeof s === "string" && s.trim())
+        : [];
+      const collectionIds = Array.isArray(filters.collectionIds)
+        ? filters.collectionIds
+            .map((id) => Number(id))
+            .filter((id) => Number.isInteger(id))
+        : [];
+      const excludedUserIds = Array.isArray(filters.excludedUserIds)
+        ? filters.excludedUserIds
+            .map((id) => Number(id))
+            .filter((id) => Number.isInteger(id))
+        : [];
+
+      const userWhere = { telegramId: { not: null } };
+      if (roles.length) userWhere.role = { in: roles };
+      if (excludedUserIds.length) userWhere.id = { notIn: excludedUserIds };
+
+      if (statuses.length || collectionIds.length) {
+        userWhere.orders = {
+          some: {
+            ...(statuses.length ? { status: { in: statuses } } : {}),
+            ...(collectionIds.length
+              ? { collectionId: { in: collectionIds } }
+              : {}),
+          },
+        };
+      }
+
+      const recipients = await prisma.user.findMany({
+        where: userWhere,
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          role: true,
+          telegramId: true,
+          telegramUsername: true,
+        },
+      });
+
+      res.json({ recipients });
+    } catch (err) {
+      console.error("[broadcast preview] Error:", err);
+      res.status(500).json({ error: "BROADCAST_PREVIEW_FAILED" });
+    }
+  }
+);
+
 // Broadcast
 router.post("/admin/broadcast", requireAuth, requireAdmin, async (req, res) => {
   const prisma = req.app.locals.prisma;
-  const { TELEGRAM_BOT_TOKEN, TELEGRAM_BOT_USERNAME } = process.env;
+  const {
+    TELEGRAM_BOT_TOKEN,
+    TELEGRAM_BOT_USERNAME,
+    SMTP_HOST,
+    SMTP_USER,
+    SMTP_PASS,
+    EMAIL_FROM,
+  } = process.env;
   try {
-    const { message, filters = {}, channels = ["TELEGRAM"] } = req.body || {};
+    const {
+      message,
+      filters = {},
+      channels = ["TELEGRAM"],
+      excludedUserIds = [],
+    } = req.body || {};
     if (!message || !String(message).trim())
       return res.status(400).json({ error: "MESSAGE_REQUIRED" });
 
@@ -986,16 +1068,41 @@ router.post("/admin/broadcast", requireAuth, requireAdmin, async (req, res) => {
           .map((id) => Number(id))
           .filter((id) => Number.isInteger(id))
       : [];
-    const userIds = Array.isArray(filters.userIds)
-      ? filters.userIds
+    const excludedIds = Array.isArray(excludedUserIds)
+      ? excludedUserIds
           .map((id) => Number(id))
           .filter((id) => Number.isInteger(id))
       : [];
 
     const wantTelegram = channels.includes("TELEGRAM");
-    const userWhere = wantTelegram ? { telegramId: { not: null } } : {};
+    const wantEmail = channels.includes("EMAIL");
+
+    // Проверяем настройки каналов
+    const telegramConfigured = !!(TELEGRAM_BOT_TOKEN && TELEGRAM_BOT_USERNAME);
+    const emailConfigured = !!(SMTP_HOST && SMTP_USER && SMTP_PASS);
+
+    const warnings = [];
+    if (wantTelegram && !telegramConfigured) {
+      return res.status(501).json({ error: "TELEGRAM_NOT_CONFIGURED" });
+    }
+    if (wantEmail && !emailConfigured) {
+      warnings.push(
+        "EMAIL не настроен: отсутствуют SMTP_HOST, SMTP_USER или SMTP_PASS"
+      );
+    }
+
+    // Формируем условия для получателей
+    const userWhere = {};
+    if (wantTelegram && !wantEmail) {
+      userWhere.telegramId = { not: null };
+    } else if (!wantTelegram && wantEmail) {
+      userWhere.email = { not: null };
+    }
+    // Если оба канала - получим всех у кого есть хотя бы один из контактов
+
     if (roles.length) userWhere.role = { in: roles };
-    if (userIds.length) userWhere.id = { in: userIds };
+    if (excludedIds.length) userWhere.id = { notIn: excludedIds };
+
     if (statuses.length || collectionIds.length) {
       userWhere.orders = {
         some: {
@@ -1007,37 +1114,61 @@ router.post("/admin/broadcast", requireAuth, requireAdmin, async (req, res) => {
       };
     }
 
-    let recipients = [];
-    if (wantTelegram) {
-      if (!TELEGRAM_BOT_TOKEN || !TELEGRAM_BOT_USERNAME) {
-        return res.status(501).json({ error: "TELEGRAM_NOT_CONFIGURED" });
-      }
-      recipients = await prisma.user.findMany({
-        where: userWhere,
-        select: { id: true, telegramId: true, name: true, email: true },
-      });
-    }
+    const recipients = await prisma.user.findMany({
+      where: userWhere,
+      select: { id: true, telegramId: true, name: true, email: true },
+    });
+
     if (!recipients.length)
       return res.json({
         preview: buildTelegramMessage(message),
         totalRecipients: 0,
         sent: 0,
         failures: [],
-        warnings: channels.includes("EMAIL")
-          ? ["EMAIL channel not configured; skipped"]
-          : [],
+        warnings,
       });
 
     const failures = [];
     let sent = 0;
     const finalMessage = buildTelegramMessage(message);
-    if (wantTelegram) {
+
+    // Отправка через Telegram
+    if (wantTelegram && telegramConfigured) {
       for (const recipient of recipients) {
+        if (!recipient.telegramId) continue;
         try {
           await sendTelegramMessage(recipient.telegramId, finalMessage);
           sent += 1;
         } catch (error) {
-          failures.push({ userId: recipient.id, error: error.message });
+          failures.push({
+            userId: recipient.id,
+            channel: "TELEGRAM",
+            error: error.message,
+          });
+        }
+      }
+    }
+
+    // Отправка через Email
+    if (wantEmail && emailConfigured) {
+      const mailer = await getMailer();
+      for (const recipient of recipients) {
+        if (!recipient.email) continue;
+        try {
+          await mailer.sendMail({
+            from: EMAIL_FROM || "no-reply@example.com",
+            to: recipient.email,
+            subject: "Сообщение от Ля Креведко",
+            text: finalMessage,
+            html: `<pre style="white-space: pre-wrap; font-family: inherit;">${finalMessage}</pre>`,
+          });
+          sent += 1;
+        } catch (error) {
+          failures.push({
+            userId: recipient.id,
+            channel: "EMAIL",
+            error: error.message,
+          });
         }
       }
     }
@@ -1047,9 +1178,7 @@ router.post("/admin/broadcast", requireAuth, requireAdmin, async (req, res) => {
       totalRecipients: recipients.length,
       sent,
       failures,
-      warnings: channels.includes("EMAIL")
-        ? ["EMAIL channel not configured; skipped"]
-        : [],
+      warnings,
     });
   } catch (err) {
     console.error(err);

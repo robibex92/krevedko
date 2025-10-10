@@ -217,13 +217,19 @@ if (process.env.TELEGRAM_BOT_TOKEN) {
   // Обрабатываем очередь каждые 10 секунд
   queueInterval = setInterval(async () => {
     try {
+      if (!prisma) {
+        console.error("[telegram-bot] Prisma is undefined!");
+        return;
+      }
       await processMessageQueue(prisma);
     } catch (error) {
-      console.error("[telegram-bot] Queue processing error:", error);
+      console.error("Failed to process message queue:", error);
     }
   }, 10000);
 } else {
-  console.log("[telegram-bot] Message queue processor disabled (no TELEGRAM_BOT_TOKEN)");
+  console.log(
+    "[telegram-bot] Message queue processor disabled (no TELEGRAM_BOT_TOKEN)"
+  );
 }
 
 async function shutdown(signal) {

@@ -42,26 +42,35 @@ export function bbcodeToHtml(input = "") {
     { tag: "em", open: "<em>", close: "</em>" },
     { tag: "u", open: "<u>", close: "</u>" },
     { tag: "s", open: "<s>", close: "</s>" },
-    { tag: "quote", open: '<blockquote class="bb-quote">', close: "</blockquote>" },
-    { tag: "code", open: '<pre class="bb-code">', close: "</pre>" },
+    {
+      tag: "quote",
+      open: '<blockquote className="bb-quote">',
+      close: "</blockquote>",
+    },
+    { tag: "code", open: '<pre className="bb-code">', close: "</pre>" },
   ];
 
   for (const { tag, open, close } of replacements) {
     html = replaceSimpleTag(html, tag, open, close);
   }
 
-  html = html.replace(/\[url(?:=([^\]]+))?\]([\s\S]*?)\[\/url\]/gi, (_match, hrefParam, text) => {
-    const safeHref = sanitizeHref(hrefParam || text);
-    const safeText = text ? text.trim() : "";
-    const display = safeText ? escapeHtml(safeText) : safeHref || "";
-    if (!safeHref) return display;
-    return `<a href="${safeHref}" target="_blank" rel="noopener noreferrer">${display || safeHref}</a>`;
-  });
+  html = html.replace(
+    /\[url(?:=([^\]]+))?\]([\s\S]*?)\[\/url\]/gi,
+    (_match, hrefParam, text) => {
+      const safeHref = sanitizeHref(hrefParam || text);
+      const safeText = text ? text.trim() : "";
+      const display = safeText ? escapeHtml(safeText) : safeHref || "";
+      if (!safeHref) return display;
+      return `<a href="${safeHref}" target="_blank" rel="noopener noreferrer">${
+        display || safeHref
+      }</a>`;
+    }
+  );
 
   html = html.replace(/\[img\]([\s\S]*?)\[\/img\]/gi, (_match, value) => {
     const safeSrc = sanitizeSrc(value);
     if (!safeSrc) return "";
-    return `<img src="${safeSrc}" alt="" loading="lazy" class="bb-image" />`;
+    return `<img src="${safeSrc}" alt="" loading="lazy" className="bb-image" />`;
   });
 
   html = html.replace(/\[br\]/gi, "<br />");

@@ -13,7 +13,10 @@ import {
   clearRefreshCookie,
   resolveUserId,
 } from "../middleware/auth.js";
-import { sendVerificationEmail, sendPasswordResetEmail } from "../services/mailer.js";
+import {
+  sendVerificationEmail,
+  sendPasswordResetEmail,
+} from "../services/mailer.js";
 import { verifyTelegramLogin } from "../services/telegram.js";
 import { clearCache } from "../services/cache.js";
 
@@ -22,17 +25,24 @@ const router = Router();
 router.post("/register", async (req, res) => {
   const prisma = req.app.locals.prisma;
   try {
-    const { email, password, name, phone, firstName, lastName } = req.body || {};
+    const { email, password, name, phone, firstName, lastName } =
+      req.body || {};
     if (!email || !password) {
       return res.status(400).json({ error: "EMAIL_PASSWORD_REQUIRED" });
     }
     const normalizedEmail = String(email).trim().toLowerCase();
-    const existing = await prisma.user.findUnique({ where: { email: normalizedEmail } });
-    if (existing) return res.status(409).json({ error: "EMAIL_ALREADY_EXISTS" });
+    const existing = await prisma.user.findUnique({
+      where: { email: normalizedEmail },
+    });
+    if (existing)
+      return res.status(409).json({ error: "EMAIL_ALREADY_EXISTS" });
     const passwordHash = await bcrypt.hash(password, 10);
     const normalizedFirstName = firstName ? String(firstName).trim() : null;
     const normalizedLastName = lastName ? String(lastName).trim() : null;
-    const fallbackName = name?.trim() || [normalizedFirstName, normalizedLastName].filter(Boolean).join(" ") || null;
+    const fallbackName =
+      name?.trim() ||
+      [normalizedFirstName, normalizedLastName].filter(Boolean).join(" ") ||
+      null;
 
     const user = await prisma.user.create({
       data: {
@@ -52,10 +62,16 @@ router.post("/register", async (req, res) => {
         where: { id: user.id },
         data: {
           emailVerificationTokenHash: sha256Hex(token),
-          emailVerificationExpiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
+          emailVerificationExpiresAt: new Date(
+            Date.now() + 24 * 60 * 60 * 1000
+          ),
         },
       });
-      try { await sendVerificationEmail(normalizedEmail, token); } catch (e) { console.error("[mail] send failed", e); }
+      try {
+        await sendVerificationEmail(normalizedEmail, token);
+      } catch (e) {
+        console.error("[mail] send failed", e);
+      }
     }
 
     if (req.session.referrerId) {
@@ -73,7 +89,9 @@ router.post("/register", async (req, res) => {
         data: {
           userId: user.id,
           jti,
-          expiresAt: exp ? new Date(exp * 1000) : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+          expiresAt: exp
+            ? new Date(exp * 1000)
+            : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
           createdByIp: req.ip || null,
         },
       });
@@ -92,10 +110,15 @@ router.post("/password/forgot", async (req, res) => {
   const prisma = req.app.locals.prisma;
   try {
     const { email } = req.body || {};
-    const normalizedEmail = String(email || "").trim().toLowerCase();
-    if (!normalizedEmail) return res.status(400).json({ error: "EMAIL_REQUIRED" });
+    const normalizedEmail = String(email || "")
+      .trim()
+      .toLowerCase();
+    if (!normalizedEmail)
+      return res.status(400).json({ error: "EMAIL_REQUIRED" });
 
-    const user = await prisma.user.findUnique({ where: { email: normalizedEmail } });
+    const user = await prisma.user.findUnique({
+      where: { email: normalizedEmail },
+    });
 
     if (user) {
       const token = randomToken(32);
@@ -124,7 +147,9 @@ router.post("/password/reset", async (req, res) => {
   const prisma = req.app.locals.prisma;
   try {
     const { email, token, password } = req.body || {};
-    const normalizedEmail = String(email || "").trim().toLowerCase();
+    const normalizedEmail = String(email || "")
+      .trim()
+      .toLowerCase();
     const providedToken = String(token || "").trim();
     const newPassword = String(password || "").trim();
 
@@ -135,7 +160,9 @@ router.post("/password/reset", async (req, res) => {
       return res.status(400).json({ error: "PASSWORD_TOO_SHORT" });
     }
 
-    const user = await prisma.user.findUnique({ where: { email: normalizedEmail } });
+    const user = await prisma.user.findUnique({
+      where: { email: normalizedEmail },
+    });
     if (
       !user ||
       !user.passwordResetTokenHash ||
@@ -176,7 +203,9 @@ router.post("/password/reset", async (req, res) => {
         data: {
           userId: updatedUser.id,
           jti,
-          expiresAt: exp ? new Date(exp * 1000) : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+          expiresAt: exp
+            ? new Date(exp * 1000)
+            : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
           createdByIp: req.ip || null,
         },
       });
@@ -196,9 +225,13 @@ router.post("/login", async (req, res) => {
   const prisma = req.app.locals.prisma;
   try {
     const { email, password } = req.body || {};
-    if (!email || !password) return res.status(400).json({ error: "EMAIL_PASSWORD_REQUIRED" });
-    const user = await prisma.user.findUnique({ where: { email: String(email).trim().toLowerCase() } });
-    if (!user?.passwordHash) return res.status(401).json({ error: "INVALID_CREDENTIALS" });
+    if (!email || !password)
+      return res.status(400).json({ error: "EMAIL_PASSWORD_REQUIRED" });
+    const user = await prisma.user.findUnique({
+      where: { email: String(email).trim().toLowerCase() },
+    });
+    if (!user?.passwordHash)
+      return res.status(401).json({ error: "INVALID_CREDENTIALS" });
     const ok = await bcrypt.compare(password, user.passwordHash);
     if (!ok) return res.status(401).json({ error: "INVALID_CREDENTIALS" });
     // Session for backward-compatibility
@@ -211,7 +244,9 @@ router.post("/login", async (req, res) => {
         data: {
           userId: user.id,
           jti,
-          expiresAt: exp ? new Date(exp * 1000) : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+          expiresAt: exp
+            ? new Date(exp * 1000)
+            : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
           createdByIp: req.ip || null,
         },
       });
@@ -249,6 +284,29 @@ router.post("/logout", async (req, res) => {
   }
 });
 
+// ИСПРАВЛЕНИЕ MEDIUM-4: Logout со всех устройств
+router.post("/logout-all", requireAuth, async (req, res) => {
+  const prisma = req.app.locals.prisma;
+  try {
+    const userId = req.session.user.id;
+    // Отзываем все refresh tokens пользователя
+    await prisma.refreshToken.updateMany({
+      where: { userId, revokedAt: null },
+      data: { revokedAt: new Date() },
+    });
+    // Очищаем текущую сессию и cookie
+    clearRefreshCookie(res);
+    if (req.session) {
+      req.session.destroy(() => {});
+    }
+    res.clearCookie("sid");
+    res.json({ ok: true, message: "Logged out from all devices" });
+  } catch (err) {
+    console.error("[auth] logout-all failed", err);
+    res.status(500).json({ error: "LOGOUT_ALL_FAILED" });
+  }
+});
+
 router.get("/me", async (req, res) => {
   // Disable caching to avoid 304 responses breaking fetch handling on the frontend
   res.set("Cache-Control", "no-store, no-cache, must-revalidate");
@@ -257,9 +315,13 @@ router.get("/me", async (req, res) => {
   if (req.session?.user) return res.json({ user: req.session.user });
   try {
     const authz = req.headers["authorization"] || req.headers["Authorization"];
-    if (!authz || !authz.toString().startsWith("Bearer ")) return res.json({ user: null });
+    if (!authz || !authz.toString().startsWith("Bearer "))
+      return res.json({ user: null });
     const token = authz.toString().slice(7);
-    const payload = jwt.verify(token, process.env.JWT_ACCESS_SECRET || "dev_access_secret_change_me");
+    const payload = jwt.verify(
+      token,
+      process.env.JWT_ACCESS_SECRET || "dev_access_secret_change_me"
+    );
     const userId = resolveUserId(payload?.sub);
     if (userId === null) return res.json({ user: null });
     const prisma = req.app.locals.prisma;
@@ -280,12 +342,15 @@ router.post("/refresh", async (req, res) => {
     const payload = verifyRefreshToken(token);
     const prisma = req.app.locals.prisma;
     const userId = resolveUserId(payload?.sub);
-    if (userId === null) return res.status(401).json({ error: "INVALID_REFRESH" });
+    if (userId === null)
+      return res.status(401).json({ error: "INVALID_REFRESH" });
     const user = await prisma.user.findUnique({ where: { id: userId } });
     if (!user) return res.status(401).json({ error: "INVALID_REFRESH" });
 
     // DB validation of refresh token state
-    const dbToken = await prisma.refreshToken.findUnique({ where: { jti: payload.jti } });
+    const dbToken = await prisma.refreshToken.findUnique({
+      where: { jti: payload.jti },
+    });
     if (!dbToken || dbToken.revokedAt || dbToken.expiresAt < new Date()) {
       return res.status(401).json({ error: "REFRESH_REVOKED_OR_EXPIRED" });
     }
@@ -315,7 +380,9 @@ router.post("/refresh", async (req, res) => {
         data: {
           userId: user.id,
           jti: newJti,
-          expiresAt: exp ? new Date(exp * 1000) : new Date(now + 30 * 24 * 60 * 60 * 1000),
+          expiresAt: exp
+            ? new Date(exp * 1000)
+            : new Date(now + 30 * 24 * 60 * 60 * 1000),
           createdByIp: req.ip || null,
         },
       }),
@@ -334,16 +401,33 @@ router.get("/verify", async (req, res) => {
   const prisma = req.app.locals.prisma;
   try {
     const token = String(req.query.token || "").trim();
-    const email = String(req.query.email || "").trim().toLowerCase();
-    if (!token || !email) return res.status(400).json({ error: "INVALID_PARAMS" });
+    const email = String(req.query.email || "")
+      .trim()
+      .toLowerCase();
+    if (!token || !email)
+      return res.status(400).json({ error: "INVALID_PARAMS" });
     const user = await prisma.user.findUnique({ where: { email } });
-    if (!user || !user.emailVerificationTokenHash || !user.emailVerificationExpiresAt)
+    if (
+      !user ||
+      !user.emailVerificationTokenHash ||
+      !user.emailVerificationExpiresAt
+    )
       return res.status(400).json({ error: "INVALID_TOKEN" });
-    if (user.emailVerifiedAt) return res.json({ ok: true, alreadyVerified: true });
-    if (user.emailVerificationExpiresAt < new Date()) return res.status(400).json({ error: "TOKEN_EXPIRED" });
-    if (user.emailVerificationTokenHash !== sha256Hex(token)) return res.status(400).json({ error: "INVALID_TOKEN" });
+    if (user.emailVerifiedAt)
+      return res.json({ ok: true, alreadyVerified: true });
+    if (user.emailVerificationExpiresAt < new Date())
+      return res.status(400).json({ error: "TOKEN_EXPIRED" });
+    if (user.emailVerificationTokenHash !== sha256Hex(token))
+      return res.status(400).json({ error: "INVALID_TOKEN" });
 
-    await prisma.user.update({ where: { id: user.id }, data: { emailVerifiedAt: new Date(), emailVerificationTokenHash: null, emailVerificationExpiresAt: null } });
+    await prisma.user.update({
+      where: { id: user.id },
+      data: {
+        emailVerifiedAt: new Date(),
+        emailVerificationTokenHash: null,
+        emailVerificationExpiresAt: null,
+      },
+    });
     res.json({ ok: true });
   } catch (err) {
     console.error(err);
@@ -354,12 +438,25 @@ router.get("/verify", async (req, res) => {
 router.post("/verify/resend", requireAuth, async (req, res) => {
   const prisma = req.app.locals.prisma;
   try {
-    const me = await prisma.user.findUnique({ where: { id: req.session.user.id } });
+    const me = await prisma.user.findUnique({
+      where: { id: req.session.user.id },
+    });
     if (!me?.email) return res.status(400).json({ error: "NO_EMAIL" });
-    if (me.emailVerifiedAt) return res.json({ ok: true, alreadyVerified: true });
+    if (me.emailVerifiedAt)
+      return res.json({ ok: true, alreadyVerified: true });
     const token = randomToken(32);
-    await prisma.user.update({ where: { id: me.id }, data: { emailVerificationTokenHash: sha256Hex(token), emailVerificationExpiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000) } });
-    try { await sendVerificationEmail(me.email, token); } catch (e) { console.error(e); }
+    await prisma.user.update({
+      where: { id: me.id },
+      data: {
+        emailVerificationTokenHash: sha256Hex(token),
+        emailVerificationExpiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
+      },
+    });
+    try {
+      await sendVerificationEmail(me.email, token);
+    } catch (e) {
+      console.error(e);
+    }
     res.json({ ok: true });
   } catch (err) {
     console.error(err);
@@ -371,14 +468,33 @@ router.post("/email", requireAuth, async (req, res) => {
   const prisma = req.app.locals.prisma;
   try {
     const { email } = req.body || {};
-    const normalizedEmail = String(email || "").trim().toLowerCase();
-    if (!normalizedEmail) return res.status(400).json({ error: "EMAIL_REQUIRED" });
-    const taken = await prisma.user.findUnique({ where: { email: normalizedEmail } });
-    if (taken && taken.id !== req.session.user.id) return res.status(409).json({ error: "EMAIL_ALREADY_EXISTS" });
-    await prisma.user.update({ where: { id: req.session.user.id }, data: { email: normalizedEmail, emailVerifiedAt: null } });
+    const normalizedEmail = String(email || "")
+      .trim()
+      .toLowerCase();
+    if (!normalizedEmail)
+      return res.status(400).json({ error: "EMAIL_REQUIRED" });
+    const taken = await prisma.user.findUnique({
+      where: { email: normalizedEmail },
+    });
+    if (taken && taken.id !== req.session.user.id)
+      return res.status(409).json({ error: "EMAIL_ALREADY_EXISTS" });
+    await prisma.user.update({
+      where: { id: req.session.user.id },
+      data: { email: normalizedEmail, emailVerifiedAt: null },
+    });
     const token = randomToken(32);
-    await prisma.user.update({ where: { id: req.session.user.id }, data: { emailVerificationTokenHash: sha256Hex(token), emailVerificationExpiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000) } });
-    try { await sendVerificationEmail(normalizedEmail, token); } catch (e) { console.error(e); }
+    await prisma.user.update({
+      where: { id: req.session.user.id },
+      data: {
+        emailVerificationTokenHash: sha256Hex(token),
+        emailVerificationExpiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
+      },
+    });
+    try {
+      await sendVerificationEmail(normalizedEmail, token);
+    } catch (e) {
+      console.error(e);
+    }
     res.json({ ok: true });
   } catch (err) {
     console.error(err);
@@ -395,9 +511,14 @@ router.post("/telegram/verify", async (req, res) => {
     }
     const authData = req.body || {};
     const valid = verifyTelegramLogin(authData, TELEGRAM_BOT_TOKEN);
-    if (!valid) return res.status(401).json({ error: "INVALID_TELEGRAM_SIGNATURE" });
+    if (!valid)
+      return res.status(401).json({ error: "INVALID_TELEGRAM_SIGNATURE" });
     const telegramId = String(authData.id);
-    const name = [authData.first_name, authData.last_name].filter(Boolean).join(" ").trim() || null;
+    const name =
+      [authData.first_name, authData.last_name]
+        .filter(Boolean)
+        .join(" ")
+        .trim() || null;
     const telegramUsername = authData.username || null;
     const telegramPhotoUrl = authData.photo_url || null;
     const firstName = authData.first_name || null;
@@ -425,7 +546,10 @@ router.post("/telegram/verify", async (req, res) => {
       if (!user.avatarPath && telegramPhotoUrl) {
         updateData.avatarPath = null;
       }
-      user = await prisma.user.update({ where: { id: user.id }, data: updateData });
+      user = await prisma.user.update({
+        where: { id: user.id },
+        data: updateData,
+      });
     }
     req.session.user = publicUser(user);
     // Issue JWTs for Telegram login as well
@@ -436,12 +560,17 @@ router.post("/telegram/verify", async (req, res) => {
         data: {
           userId: user.id,
           jti,
-          expiresAt: exp ? new Date(exp * 1000) : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+          expiresAt: exp
+            ? new Date(exp * 1000)
+            : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
           createdByIp: req.ip || null,
         },
       });
     } catch (e) {
-      console.error("[auth] failed to persist refresh token on telegram verify", e);
+      console.error(
+        "[auth] failed to persist refresh token on telegram verify",
+        e
+      );
     }
     setRefreshCookie(res, refreshToken);
     res.json({ user: publicUser(user), accessToken });
@@ -460,10 +589,15 @@ router.post("/telegram/link", requireAuth, async (req, res) => {
     }
     const authData = req.body || {};
     const valid = verifyTelegramLogin(authData, TELEGRAM_BOT_TOKEN);
-    if (!valid) return res.status(401).json({ error: "INVALID_TELEGRAM_SIGNATURE" });
+    if (!valid)
+      return res.status(401).json({ error: "INVALID_TELEGRAM_SIGNATURE" });
 
     const telegramId = String(authData.id);
-    const name = [authData.first_name, authData.last_name].filter(Boolean).join(" ").trim() || null;
+    const name =
+      [authData.first_name, authData.last_name]
+        .filter(Boolean)
+        .join(" ")
+        .trim() || null;
     const telegramUsername = authData.username || null;
     const telegramPhotoUrl = authData.photo_url || null;
     const firstName = authData.first_name || null;
@@ -492,10 +626,15 @@ router.post("/telegram/link", requireAuth, async (req, res) => {
         }
 
         // 1) Move orders
-        await tx.order.updateMany({ where: { userId: otherId }, data: { userId: meId } });
+        await tx.order.updateMany({
+          where: { userId: otherId },
+          data: { userId: meId },
+        });
 
         // 2) Move cart items with upsert to avoid unique conflicts
-        const otherCart = await tx.cartItem.findMany({ where: { userId: otherId } });
+        const otherCart = await tx.cartItem.findMany({
+          where: { userId: otherId },
+        });
         for (const it of otherCart) {
           await tx.cartItem.upsert({
             where: {
@@ -521,10 +660,14 @@ router.post("/telegram/link", requireAuth, async (req, res) => {
         await tx.cartItem.deleteMany({ where: { userId: otherId } });
 
         // 3) Move favorites with upsert to avoid duplicates
-        const otherFavs = await tx.favorite.findMany({ where: { userId: otherId } });
+        const otherFavs = await tx.favorite.findMany({
+          where: { userId: otherId },
+        });
         for (const f of otherFavs) {
           await tx.favorite.upsert({
-            where: { userId_productId: { userId: meId, productId: f.productId } },
+            where: {
+              userId_productId: { userId: meId, productId: f.productId },
+            },
             update: {},
             create: { userId: meId, productId: f.productId },
           });
@@ -532,15 +675,23 @@ router.post("/telegram/link", requireAuth, async (req, res) => {
         await tx.favorite.deleteMany({ where: { userId: otherId } });
 
         // 4) Reassign referrals (children of other -> me)
-        await tx.user.updateMany({ where: { referredBy: otherId }, data: { referredBy: meId } });
+        await tx.user.updateMany({
+          where: { referredBy: otherId },
+          data: { referredBy: meId },
+        });
 
         // 5) Merge loyalty points
-        const mergedPoints = (meAccount?.loyaltyPoints || 0) + (otherAccount?.loyaltyPoints || 0);
+        const mergedPoints =
+          (meAccount?.loyaltyPoints || 0) + (otherAccount?.loyaltyPoints || 0);
 
         // 6) Release telegram unique fields on the other account to avoid constraint conflicts
         await tx.user.update({
           where: { id: otherId },
-          data: { telegramId: null, telegramUsername: null, telegramPhotoUrl: null },
+          data: {
+            telegramId: null,
+            telegramUsername: null,
+            telegramPhotoUrl: null,
+          },
         });
 
         // 7) Update current user with telegram info and merge missing fields
@@ -558,7 +709,8 @@ router.post("/telegram/link", requireAuth, async (req, res) => {
         };
 
         if (!meAccount?.name && name) updateData.name = name;
-        if (!meAccount?.firstName && firstName) updateData.firstName = firstName;
+        if (!meAccount?.firstName && firstName)
+          updateData.firstName = firstName;
         if (!meAccount?.lastName && lastName) updateData.lastName = lastName;
 
         preferField("name");
@@ -572,10 +724,16 @@ router.post("/telegram/link", requireAuth, async (req, res) => {
         preferField("email");
         preferField("emailVerifiedAt");
 
-        const updatedMe = await tx.user.update({ where: { id: meId }, data: updateData });
+        const updatedMe = await tx.user.update({
+          where: { id: meId },
+          data: updateData,
+        });
 
         // 8) Revoke/delete refresh tokens of the merged (other) user and delete other account
-        await tx.refreshToken.updateMany({ where: { userId: otherId, revokedAt: null }, data: { revokedAt: new Date() } });
+        await tx.refreshToken.updateMany({
+          where: { userId: otherId, revokedAt: null },
+          data: { revokedAt: new Date() },
+        });
         await tx.user.delete({ where: { id: otherId } });
 
         return updatedMe;
@@ -593,13 +751,19 @@ router.post("/telegram/link", requireAuth, async (req, res) => {
     // Normal path: link telegram to current account
     const updateData = { telegramId, telegramUsername, telegramPhotoUrl };
     if (!req.session.user.name && name) updateData.name = name;
-    if (!req.session.user.firstName && firstName) updateData.firstName = firstName;
+    if (!req.session.user.firstName && firstName)
+      updateData.firstName = firstName;
     if (!req.session.user.lastName && lastName) updateData.lastName = lastName;
     if (!req.session.user.avatarPath && telegramPhotoUrl) {
       updateData.avatarPath = null;
     }
 
-    if (!existing && !req.session.user.email && req.session.user.id && telegramId) {
+    if (
+      !existing &&
+      !req.session.user.email &&
+      req.session.user.id &&
+      telegramId
+    ) {
       // Попробуем найти "телеграм-" аккаунт без email, чтобы его объединить
       const orphan = await prisma.user.findFirst({
         where: {
@@ -611,12 +775,19 @@ router.post("/telegram/link", requireAuth, async (req, res) => {
       if (orphan) {
         const merged = await prisma.$transaction(async (tx) => {
           const meAccount = await tx.user.findUnique({ where: { id: meId } });
-          const otherAccount = await tx.user.findUnique({ where: { id: orphan.id } });
+          const otherAccount = await tx.user.findUnique({
+            where: { id: orphan.id },
+          });
           if (!otherAccount) return meAccount;
 
-          await tx.order.updateMany({ where: { userId: orphan.id }, data: { userId: meId } });
+          await tx.order.updateMany({
+            where: { userId: orphan.id },
+            data: { userId: meId },
+          });
 
-          const otherCart = await tx.cartItem.findMany({ where: { userId: orphan.id } });
+          const otherCart = await tx.cartItem.findMany({
+            where: { userId: orphan.id },
+          });
           for (const it of otherCart) {
             await tx.cartItem.upsert({
               where: {
@@ -641,19 +812,28 @@ router.post("/telegram/link", requireAuth, async (req, res) => {
           }
           await tx.cartItem.deleteMany({ where: { userId: orphan.id } });
 
-          const otherFavs = await tx.favorite.findMany({ where: { userId: orphan.id } });
+          const otherFavs = await tx.favorite.findMany({
+            where: { userId: orphan.id },
+          });
           for (const f of otherFavs) {
             await tx.favorite.upsert({
-              where: { userId_productId: { userId: meId, productId: f.productId } },
+              where: {
+                userId_productId: { userId: meId, productId: f.productId },
+              },
               update: {},
               create: { userId: meId, productId: f.productId },
             });
           }
           await tx.favorite.deleteMany({ where: { userId: orphan.id } });
 
-          await tx.user.updateMany({ where: { referredBy: orphan.id }, data: { referredBy: meId } });
+          await tx.user.updateMany({
+            where: { referredBy: orphan.id },
+            data: { referredBy: meId },
+          });
 
-          const mergedPoints = (meAccount?.loyaltyPoints || 0) + (otherAccount?.loyaltyPoints || 0);
+          const mergedPoints =
+            (meAccount?.loyaltyPoints || 0) +
+            (otherAccount?.loyaltyPoints || 0);
 
           const mergeData = {
             telegramId,
@@ -677,8 +857,14 @@ router.post("/telegram/link", requireAuth, async (req, res) => {
           preferField("email");
           preferField("emailVerifiedAt");
 
-          const updatedMe = await tx.user.update({ where: { id: meId }, data: mergeData });
-          await tx.refreshToken.updateMany({ where: { userId: orphan.id, revokedAt: null }, data: { revokedAt: new Date() } });
+          const updatedMe = await tx.user.update({
+            where: { id: meId },
+            data: mergeData,
+          });
+          await tx.refreshToken.updateMany({
+            where: { userId: orphan.id, revokedAt: null },
+            data: { revokedAt: new Date() },
+          });
           await tx.user.delete({ where: { id: orphan.id } });
 
           return updatedMe;
@@ -695,9 +881,14 @@ router.post("/telegram/link", requireAuth, async (req, res) => {
       }
     }
 
-    const user = await prisma.user.update({ where: { id: meId }, data: updateData });
+    const user = await prisma.user.update({
+      where: { id: meId },
+      data: updateData,
+    });
     req.session.user = publicUser(user);
-    try { clearCache(`favorites:${meId}`); } catch {}
+    try {
+      clearCache(`favorites:${meId}`);
+    } catch {}
     res.json({ user: publicUser(user) });
   } catch (err) {
     console.error(err);
@@ -708,7 +899,9 @@ router.post("/telegram/link", requireAuth, async (req, res) => {
 router.post("/telegram/unlink", requireAuth, async (req, res) => {
   const prisma = req.app.locals.prisma;
   try {
-    const me = await prisma.user.findUnique({ where: { id: req.session.user.id } });
+    const me = await prisma.user.findUnique({
+      where: { id: req.session.user.id },
+    });
     if (!me) return res.status(404).json({ error: "USER_NOT_FOUND" });
 
     // Safety: prevent lockout. Allow unlink only if user can login by other means
@@ -720,10 +913,16 @@ router.post("/telegram/unlink", requireAuth, async (req, res) => {
 
     const updated = await prisma.user.update({
       where: { id: me.id },
-      data: { telegramId: null, telegramUsername: null, telegramPhotoUrl: null },
+      data: {
+        telegramId: null,
+        telegramUsername: null,
+        telegramPhotoUrl: null,
+      },
     });
     req.session.user = publicUser(updated);
-    try { clearCache(`favorites:${me.id}`); } catch {}
+    try {
+      clearCache(`favorites:${me.id}`);
+    } catch {}
     res.json({ user: publicUser(updated) });
   } catch (err) {
     console.error(err);
