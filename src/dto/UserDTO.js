@@ -24,6 +24,11 @@ export function toUserProfileDTO(user) {
     telegramUsername: user.telegramUsername,
     telegramFirstName: user.telegramFirstName,
     telegramLastName: user.telegramLastName,
+    telegramPhotoUrl: user.telegramPhotoUrl,
+    addressStreet: user.addressStreet,
+    addressHouse: user.addressHouse,
+    addressApartment: user.addressApartment,
+    loyaltyPoints: user.loyaltyPoints,
     createdAt: user.createdAt,
   };
 }
