@@ -1,6 +1,11 @@
+import { ValidationError } from "../core/errors/AppError.js";
+
 export async function clearVerificationState(prisma, user) {
   if (!prisma || !user?.id) {
-    throw new Error("clearVerificationState requires prisma instance and user");
+    throw new ValidationError(
+      "clearVerificationState requires prisma instance and user",
+      "INVALID_ARGUMENTS"
+    );
   }
 
   const data = {

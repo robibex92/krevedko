@@ -4,9 +4,7 @@ import compression from "compression";
 import helmet from "helmet";
 import cors from "cors";
 import morgan from "morgan";
-import session from "express-session";
 import cookieParser from "cookie-parser";
-import connectSqlite3 from "connect-sqlite3";
 import path from "path";
 import { fileURLToPath } from "url";
 import fs from "fs";
@@ -37,7 +35,6 @@ const __dirname = path.dirname(__filename);
 
 // Read env with sensible defaults
 const ENV = process.env;
-const SESSION_SECRET = ENV.SESSION_SECRET || "change_me_in_env";
 const NODE_ENV = ENV.NODE_ENV || "development";
 const UPLOAD_LIMIT_MB = parseInt(ENV.UPLOAD_LIMIT_MB || "5", 10);
 const API_URL = ENV.API_URL || null;
@@ -61,10 +58,6 @@ fs.mkdirSync(uploadPaymentsDir, { recursive: true });
 fs.mkdirSync(uploadAvatarsDir, { recursive: true });
 fs.mkdirSync(uploadReviewsDir, { recursive: true });
 fs.mkdirSync(uploadRecipesDir, { recursive: true });
-
-const SQLiteStore = connectSqlite3(session);
-const sessionDir = path.resolve(__dirname, "../.data");
-fs.mkdirSync(sessionDir, { recursive: true });
 
 // Core middlewares
 app.set("trust proxy", 1);
@@ -98,23 +91,6 @@ app.use(
     setHeaders: (res, filePath) => {
       // Allow cross-origin embedding of images/files
       res.setHeader("Cross-Origin-Resource-Policy", "cross-origin");
-    },
-  })
-);
-
-// Sessions
-app.use(
-  session({
-    name: "sid",
-    secret: SESSION_SECRET,
-    resave: false,
-    saveUninitialized: false,
-    store: new SQLiteStore({ db: "sessions.sqlite", dir: sessionDir }),
-    cookie: {
-      httpOnly: true,
-      sameSite: NODE_ENV === "production" ? "none" : "lax",
-      secure: NODE_ENV === "production",
-      maxAge: 1000 * 60 * 60 * 24 * 30, // 30 дней
     },
   })
 );

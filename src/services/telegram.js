@@ -2,6 +2,7 @@ import crypto from "crypto";
 import FormData from "form-data";
 import fs from "fs";
 import path from "path";
+import { BusinessLogicError } from "../core/errors/AppError.js";
 
 const { TELEGRAM_BOT_TOKEN } = process.env;
 
@@ -30,7 +31,12 @@ export function verifyTelegramLogin(authData, botToken = TELEGRAM_BOT_TOKEN) {
 
 export async function sendTelegramMessage(chatId, text, options = {}) {
   const { TELEGRAM_BOT_TOKEN: token } = process.env;
-  if (!token) throw new Error("TELEGRAM_NOT_CONFIGURED");
+  if (!token) {
+    throw new BusinessLogicError(
+      "Telegram bot token is not configured",
+      "TELEGRAM_NOT_CONFIGURED"
+    );
+  }
   const fetchImpl = await ensureFetch();
   const url = `https://api.telegram.org/bot${token}/sendMessage`;
 
@@ -51,8 +57,12 @@ export async function sendTelegramMessage(chatId, text, options = {}) {
   });
 
   if (!res.ok) {
-    const body = await res.text();
-    throw new Error(`TELEGRAM_SEND_FAILED:${res.status}:${body}`);
+    const bodyText = await res.text();
+    throw new BusinessLogicError(
+      `Failed to send Telegram message: ${res.status}`,
+      "TELEGRAM_SEND_FAILED",
+      { status: res.status, response: bodyText }
+    );
   }
 
   const result = await res.json();
@@ -65,7 +75,12 @@ export async function sendTelegramPhoto(
   options = {}
 ) {
   const { TELEGRAM_BOT_TOKEN: token } = process.env;
-  if (!token) throw new Error("TELEGRAM_NOT_CONFIGURED");
+  if (!token) {
+    throw new BusinessLogicError(
+      "Telegram bot token is not configured",
+      "TELEGRAM_NOT_CONFIGURED"
+    );
+  }
   const fetchImpl = await ensureFetch();
   const url = `https://api.telegram.org/bot${token}/sendPhoto`;
   const isUrl =
@@ -103,8 +118,12 @@ export async function sendTelegramPhoto(
   }
 
   if (!res.ok) {
-    const body = await res.text();
-    throw new Error(`TELEGRAM_SEND_PHOTO_FAILED:${res.status}:${body}`);
+    const bodyText = await res.text();
+    throw new BusinessLogicError(
+      `Failed to send Telegram photo: ${res.status}`,
+      "TELEGRAM_SEND_PHOTO_FAILED",
+      { status: res.status, response: bodyText }
+    );
   }
 
   const result = await res.json();
@@ -118,7 +137,12 @@ export async function editTelegramMessage(
   options = {}
 ) {
   const { TELEGRAM_BOT_TOKEN: token } = process.env;
-  if (!token) throw new Error("TELEGRAM_NOT_CONFIGURED");
+  if (!token) {
+    throw new BusinessLogicError(
+      "Telegram bot token is not configured",
+      "TELEGRAM_NOT_CONFIGURED"
+    );
+  }
   const fetchImpl = await ensureFetch();
   const url = `https://api.telegram.org/bot${token}/editMessageText`;
 
@@ -142,9 +166,16 @@ export async function editTelegramMessage(
       bodyText.includes("message can't be edited") ||
       bodyText.includes("message to edit not found")
     ) {
-      throw new Error("MESSAGE_TOO_OLD");
+      throw new BusinessLogicError(
+        "Message is too old to edit (48 hours limit)",
+        "MESSAGE_TOO_OLD"
+      );
     }
-    throw new Error(`TELEGRAM_EDIT_FAILED:${res.status}:${bodyText}`);
+    throw new BusinessLogicError(
+      `Failed to edit Telegram message: ${res.status}`,
+      "TELEGRAM_EDIT_FAILED",
+      { status: res.status, response: bodyText }
+    );
   }
 
   const result = await res.json();
@@ -159,7 +190,12 @@ export async function editTelegramMessageMedia(
   options = {}
 ) {
   const { TELEGRAM_BOT_TOKEN: token } = process.env;
-  if (!token) throw new Error("TELEGRAM_NOT_CONFIGURED");
+  if (!token) {
+    throw new BusinessLogicError(
+      "Telegram bot token is not configured",
+      "TELEGRAM_NOT_CONFIGURED"
+    );
+  }
   const fetchImpl = await ensureFetch();
   const url = `https://api.telegram.org/bot${token}/editMessageMedia`;
 
@@ -191,9 +227,16 @@ export async function editTelegramMessageMedia(
       bodyText.includes("message can't be edited") ||
       bodyText.includes("message to edit not found")
     ) {
-      throw new Error("MESSAGE_TOO_OLD");
+      throw new BusinessLogicError(
+        "Message is too old to edit (48 hours limit)",
+        "MESSAGE_TOO_OLD"
+      );
     }
-    throw new Error(`TELEGRAM_EDIT_MEDIA_FAILED:${res.status}:${bodyText}`);
+    throw new BusinessLogicError(
+      `Failed to edit Telegram message media: ${res.status}`,
+      "TELEGRAM_EDIT_MEDIA_FAILED",
+      { status: res.status, response: bodyText }
+    );
   }
 
   const result = await res.json();
@@ -202,7 +245,12 @@ export async function editTelegramMessageMedia(
 
 export async function deleteTelegramMessage(chatId, messageId) {
   const { TELEGRAM_BOT_TOKEN: token } = process.env;
-  if (!token) throw new Error("TELEGRAM_NOT_CONFIGURED");
+  if (!token) {
+    throw new BusinessLogicError(
+      "Telegram bot token is not configured",
+      "TELEGRAM_NOT_CONFIGURED"
+    );
+  }
   const fetchImpl = await ensureFetch();
   const url = `https://api.telegram.org/bot${token}/deleteMessage`;
 
@@ -213,10 +261,14 @@ export async function deleteTelegramMessage(chatId, messageId) {
   });
 
   if (!res.ok) {
-    const body = await res.text();
+    const bodyText = await res.text();
     // Игнорируем ошибку если сообщение уже удалено
-    if (!body.includes("message to delete not found")) {
-      throw new Error(`TELEGRAM_DELETE_FAILED:${res.status}:${body}`);
+    if (!bodyText.includes("message to delete not found")) {
+      throw new BusinessLogicError(
+        `Failed to delete Telegram message: ${res.status}`,
+        "TELEGRAM_DELETE_FAILED",
+        { status: res.status, response: bodyText }
+      );
     }
   }
 

@@ -44,3 +44,8 @@ prisma/dev.db-journal
 tmp/
 .temp/
 .env.example
+
+# Documentation / Summaries (не коммитим в git)
+*.md
+!README.md
+!prisma/migrations/**/*.md

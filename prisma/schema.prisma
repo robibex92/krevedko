@@ -154,6 +154,7 @@ model Order {
   deliveryType    String   @default("PICKUP") // "PICKUP" | "DELIVERY"
   deliveryAddress String?
   deliveryCost    Int      @default(0)
+  paymentMethod   String   @default("development") // "development" | "online" | "invoice" | "cash"
   orderNumber     String?  @unique
   submittedAt     DateTime @default(now())
   createdAt       DateTime @default(now())
@@ -163,6 +164,7 @@ model Order {
   collection Collection     @relation(fields: [collectionId], references: [id], onDelete: Restrict)
   items      OrderItem[]
   proofs     PaymentProof[]
+  payments   Payment[]      // Связь с платежами
 }
 
 model OrderItem {
@@ -276,6 +278,29 @@ model PaymentProof {
   uploadedAt DateTime @default(now())
 
   order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+}
+
+model Payment {
+  id                Int       @id @default(autoincrement())
+  orderId           Int
+  provider          String    // "sberbank" | "yoomoney" | "yandex" | "manual"
+  providerPaymentId String?   @unique // ID платежа в системе провайдера
+  amount            Int       // Сумма в копейках
+  currency          String    @default("RUB")
+  status            String    @default("PENDING") // "PENDING" | "PROCESSING" | "SUCCEEDED" | "FAILED" | "CANCELLED"
+  paymentUrl        String?   // URL для оплаты (если есть)
+  errorCode         String?   // Код ошибки (если есть)
+  errorMessage      String?   // Сообщение об ошибке
+  metadata          String?   @db.Text // JSON с дополнительными данными
+  paidAt            DateTime? // Дата успешной оплаты
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  order Order @relation(fields: [orderId], references: [id], onDelete: Restrict)
+
+  @@index([orderId])
+  @@index([providerPaymentId])
+  @@index([status])
 }
 
 model Favorite {
