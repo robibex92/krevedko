@@ -13,10 +13,12 @@ import { ReviewRepository } from "../repositories/ReviewRepository.js";
 import { ProductFeedbackRepository } from "../repositories/ProductFeedbackRepository.js";
 import { RecipeRepository } from "../repositories/RecipeRepository.js";
 import { TelegramAdminRepository } from "../repositories/TelegramAdminRepository.js";
+import { OAuthRepository } from "../repositories/OAuthRepository.js";
 
 // Services
 import { OrderService } from "../services/OrderService.js";
 import { CartService } from "../services/CartService.js";
+import { GuestCartService } from "../services/GuestCartService.js";
 import { ProductService } from "../services/ProductService.js";
 import { CollectionService } from "../services/CollectionService.js";
 import { PricingService } from "../services/PricingService.js";
@@ -34,10 +36,12 @@ import { RecipeService } from "../services/RecipeService.js";
 import { TelegramAdminService } from "../services/TelegramAdminService.js";
 import { AnalyticsService } from "../services/AnalyticsService.js";
 import { BroadcastService } from "../services/BroadcastService.js";
+import { OAuthService } from "../services/OAuthService.js";
 
 // Controllers
 import { OrderController } from "../controllers/OrderController.js";
 import { CartController } from "../controllers/CartController.js";
+import { GuestCartController } from "../controllers/GuestCartController.js";
 import { ProductController } from "../controllers/ProductController.js";
 import { CollectionController } from "../controllers/CollectionController.js";
 import { AuthController } from "../controllers/AuthController.js";
@@ -52,6 +56,7 @@ import { TelegramAdminController } from "../controllers/TelegramAdminController.
 import { AnalyticsController } from "../controllers/AnalyticsController.js";
 import { BroadcastController } from "../controllers/BroadcastController.js";
 import { PublicController } from "../controllers/PublicController.js";
+import { OAuthController } from "../controllers/OAuthController.js";
 
 /**
  * Configure dependency injection container
@@ -111,6 +116,10 @@ export function configureContainer(prisma) {
     "telegramAdminRepository",
     (c) => new TelegramAdminRepository(c.resolve("prisma"))
   );
+  container.register(
+    "oauthRepository",
+    (c) => new OAuthRepository(c.resolve("prisma"))
+  );
 
   // Register Services
   container.register("mailerService", () => new MailerService());
@@ -156,6 +165,17 @@ export function configureContainer(prisma) {
         c.resolve("productRepository"),
         c.resolve("collectionRepository"),
         c.resolve("pricingService")
+      )
+  );
+
+  container.register(
+    "guestCartService",
+    (c) =>
+      new GuestCartService(
+        c.resolve("cartRepository"),
+        c.resolve("productRepository"),
+        c.resolve("pricingService"),
+        c.resolve("prisma")
       )
   );
 
@@ -255,6 +275,17 @@ export function configureContainer(prisma) {
     (c) => new BroadcastService(c.resolve("prisma"))
   );
 
+  container.register(
+    "oauthService",
+    (c) =>
+      new OAuthService(
+        c.resolve("oauthRepository"),
+        c.resolve("userRepository"),
+        c.resolve("guestCartService"),
+        c.resolve("orderService")
+      )
+  );
+
   // Register Controllers
   container.register(
     "orderController",
@@ -271,6 +302,15 @@ export function configureContainer(prisma) {
       new CartController(
         c.resolve("cartService"),
         c.resolve("collectionService")
+      )
+  );
+
+  container.register(
+    "guestCartController",
+    (c) =>
+      new GuestCartController(
+        c.resolve("guestCartService"),
+        c.resolve("orderService")
       )
   );
 
@@ -344,6 +384,11 @@ export function configureContainer(prisma) {
   );
 
   container.register("publicController", () => new PublicController());
+
+  container.register(
+    "oauthController",
+    (c) => new OAuthController(c.resolve("oauthService"))
+  );
 
   return container;
 }

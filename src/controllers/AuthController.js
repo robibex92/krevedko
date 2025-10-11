@@ -25,22 +25,18 @@ export class AuthController extends BaseController {
     // Validation
     const validatedData = validateRegister(req.body || {});
 
-    const referredBy = req.session?.referrerId || null;
+    // Get referral from cookie instead of session
+    const referredBy = req.cookies?.referralCode || null;
 
     const result = await this.authService.register({
       ...validatedData,
       referredBy,
     });
 
-    // Clear referral data from session
-    if (req.session?.referrerId) {
-      delete req.session.referrerId;
-      delete req.session.referralCode;
+    // Clear referral cookie
+    if (req.cookies?.referralCode) {
+      res.clearCookie("referralCode");
     }
-
-    // Set session for backward compatibility
-    req.session = req.session || {};
-    req.session.user = result.user;
 
     // Set refresh token cookie
     this.setRefreshCookie(res, result.refreshToken);
@@ -64,10 +60,6 @@ export class AuthController extends BaseController {
 
     const result = await this.authService.login(email, password, req.ip);
 
-    // Set session for backward compatibility
-    req.session = req.session || {};
-    req.session.user = result.user;
-
     // Set refresh token cookie
     this.setRefreshCookie(res, result.refreshToken);
 
@@ -86,17 +78,10 @@ export class AuthController extends BaseController {
 
     await this.authService.logout(refreshToken);
 
-    // Clear cookies and session
+    // Clear cookies
     this.clearRefreshCookie(res);
 
-    if (req.session) {
-      req.session.destroy(() => {
-        res.clearCookie("sid");
-        this.success(res, { ok: true });
-      });
-    } else {
-      this.success(res, { ok: true });
-    }
+    this.success(res, { ok: true });
   };
 
   /**
@@ -108,13 +93,8 @@ export class AuthController extends BaseController {
 
     const result = await this.authService.logoutAll(userId);
 
-    // Clear cookies and session
+    // Clear cookies
     this.clearRefreshCookie(res);
-
-    if (req.session) {
-      req.session.destroy(() => {});
-    }
-    res.clearCookie("sid");
 
     this.success(res, result);
   };
@@ -129,11 +109,6 @@ export class AuthController extends BaseController {
     res.set("Pragma", "no-cache");
     res.set("Expires", "0");
 
-    // Check session first (backward compatibility)
-    if (req.session?.user) {
-      return this.success(res, { user: req.session.user });
-    }
-
     // Check JWT
     const authHeader =
       req.headers["authorization"] || req.headers["Authorization"];
@@ -144,12 +119,6 @@ export class AuthController extends BaseController {
 
     const token = String(authHeader).slice(7);
     const user = await this.authService.getCurrentUser(token);
-
-    if (user) {
-      // Set session for backward compatibility
-      req.session = req.session || {};
-      req.session.user = user;
-    }
 
     this.success(res, { user });
   };
@@ -165,10 +134,6 @@ export class AuthController extends BaseController {
       refreshToken,
       req.ip
     );
-
-    // Update session
-    req.session = req.session || {};
-    req.session.user = result.user;
 
     // If refresh token was rotated, set new cookie
     if (result.refreshToken) {
@@ -203,10 +168,6 @@ export class AuthController extends BaseController {
     const { email, token, password } = validateResetPassword(req.body || {});
 
     const result = await this.authService.resetPassword(email, token, password);
-
-    // Set session
-    req.session = req.session || {};
-    req.session.user = result.user;
 
     // Set refresh token cookie
     this.setRefreshCookie(res, result.refreshToken);
@@ -267,10 +228,6 @@ export class AuthController extends BaseController {
 
     const result = await this.authService.telegramVerify(authData, req.ip);
 
-    // Set session
-    req.session = req.session || {};
-    req.session.user = result.user;
-
     // Set refresh token cookie
     this.setRefreshCookie(res, result.refreshToken);
 
@@ -290,10 +247,6 @@ export class AuthController extends BaseController {
 
     const result = await this.authService.telegramLink(userId, authData);
 
-    // Update session
-    req.session = req.session || {};
-    req.session.user = result.user;
-
     this.success(res, result);
   };
 
@@ -305,10 +258,6 @@ export class AuthController extends BaseController {
     const userId = this.getUserId(req);
 
     const result = await this.authService.telegramUnlink(userId);
-
-    // Update session
-    req.session = req.session || {};
-    req.session.user = result.user;
 
     this.success(res, result);
   };

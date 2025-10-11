@@ -43,8 +43,7 @@ export class ProfileController extends BaseController {
       updates
     );
 
-    // Update session with new user data
-    req.session.user = publicUser(updatedUser);
+    // Session removed - JWT-only auth
 
     // Применяем DTO для профиля
     const userDTO = toUserProfileDTO(updatedUser);
@@ -126,8 +125,7 @@ export class ProfileController extends BaseController {
 
     const updatedUser = await this.profileService.updateAvatar(userId, relPath);
 
-    // Update session with new user data
-    req.session.user = publicUser(updatedUser);
+    // Session removed - JWT-only auth
 
     this.success(res, { avatarPath: relPath });
   };

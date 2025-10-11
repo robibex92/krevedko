@@ -35,5 +35,8 @@ export function createOrderRoutes(container) {
     asyncHandler(orderController.repeatOrder)
   );
 
+  // Guest order endpoint (no auth required)
+  router.post("/orders/guest", asyncHandler(orderController.createGuestOrder));
+
   return router;
 }

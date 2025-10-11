@@ -52,7 +52,7 @@ router.post("/register", async (req, res) => {
         firstName: normalizedFirstName,
         lastName: normalizedLastName,
         phone: phone || null,
-        referredBy: req.session.referrerId || null,
+        referredBy: req.cookies?.referralCode || null,
       },
     });
 
@@ -74,12 +74,11 @@ router.post("/register", async (req, res) => {
       }
     }
 
-    if (req.session.referrerId) {
-      delete req.session.referrerId;
-      delete req.session.referralCode;
+    if (req.cookies?.referralCode) {
+      res.clearCookie("referralCode");
     }
 
-    req.session.user = publicUser(user);
+    req.user = publicUser(user);
     // Issue JWTs right after registration
     const accessToken = signAccessToken(user);
     const { token: refreshToken, jti, exp } = signRefreshToken(user);
@@ -195,7 +194,7 @@ router.post("/password/reset", async (req, res) => {
       console.error("[auth] failed to revoke refresh tokens after reset", e);
     }
 
-    req.session.user = publicUser(updatedUser);
+    req.user = publicUser(updatedUser);
     const accessToken = signAccessToken(updatedUser);
     const { token: refreshToken, jti, exp } = signRefreshToken(updatedUser);
     try {
@@ -235,7 +234,7 @@ router.post("/login", async (req, res) => {
     const ok = await bcrypt.compare(password, user.passwordHash);
     if (!ok) return res.status(401).json({ error: "INVALID_CREDENTIALS" });
     // Session for backward-compatibility
-    req.session.user = publicUser(user);
+    req.user = publicUser(user);
     // JWT tokens
     const accessToken = signAccessToken(user);
     const { token: refreshToken, jti, exp } = signRefreshToken(user);
@@ -276,11 +275,7 @@ router.post("/logout", async (req, res) => {
     }
   } finally {
     clearRefreshCookie(res);
-    if (!req.session) return res.json({ ok: true });
-    req.session.destroy(() => {
-      res.clearCookie("sid");
-      res.json({ ok: true });
-    });
+    return res.json({ ok: true });
   }
 });
 
@@ -288,7 +283,7 @@ router.post("/logout", async (req, res) => {
 router.post("/logout-all", requireAuth, async (req, res) => {
   const prisma = req.app.locals.prisma;
   try {
-    const userId = req.session.user.id;
+    const userId = req.user.id;
     // Отзываем все refresh tokens пользователя
     await prisma.refreshToken.updateMany({
       where: { userId, revokedAt: null },
@@ -296,10 +291,7 @@ router.post("/logout-all", requireAuth, async (req, res) => {
     });
     // Очищаем текущую сессию и cookie
     clearRefreshCookie(res);
-    if (req.session) {
-      req.session.destroy(() => {});
-    }
-    res.clearCookie("sid");
+    // Session removed - JWT only
     res.json({ ok: true, message: "Logged out from all devices" });
   } catch (err) {
     console.error("[auth] logout-all failed", err);
@@ -312,7 +304,7 @@ router.get("/me", async (req, res) => {
   res.set("Cache-Control", "no-store, no-cache, must-revalidate");
   res.set("Pragma", "no-cache");
   res.set("Expires", "0");
-  if (req.session?.user) return res.json({ user: req.session.user });
+  // Check JWT only
   try {
     const authz = req.headers["authorization"] || req.headers["Authorization"];
     if (!authz || !authz.toString().startsWith("Bearer "))
@@ -327,8 +319,7 @@ router.get("/me", async (req, res) => {
     const prisma = req.app.locals.prisma;
     const user = await prisma.user.findUnique({ where: { id: userId } });
     if (!user) return res.json({ user: null });
-    req.session = req.session || {};
-    req.session.user = publicUser(user);
+    // Session removed - JWT only
     return res.json({ user: publicUser(user) });
   } catch {
     return res.json({ user: null });
@@ -364,8 +355,7 @@ router.post("/refresh", async (req, res) => {
     if (remainingMs > ROTATE_THRESHOLD_MS) {
       // Keep existing refresh token, only issue a new access token
       accessToken = signAccessToken(user);
-      req.session = req.session || {};
-      req.session.user = publicUser(user);
+      // Session removed - JWT only
       return res.json({ accessToken, user: publicUser(user) });
     }
 
@@ -389,8 +379,7 @@ router.post("/refresh", async (req, res) => {
     ]);
     setRefreshCookie(res, newToken);
     accessToken = signAccessToken(user);
-    req.session = req.session || {};
-    req.session.user = publicUser(user);
+    // Session removed - JWT only
     res.json({ accessToken, user: publicUser(user) });
   } catch (e) {
     return res.status(401).json({ error: "REFRESH_FAILED" });
@@ -439,7 +428,7 @@ router.post("/verify/resend", requireAuth, async (req, res) => {
   const prisma = req.app.locals.prisma;
   try {
     const me = await prisma.user.findUnique({
-      where: { id: req.session.user.id },
+      where: { id: req.user.id },
     });
     if (!me?.email) return res.status(400).json({ error: "NO_EMAIL" });
     if (me.emailVerifiedAt)
@@ -476,15 +465,15 @@ router.post("/email", requireAuth, async (req, res) => {
     const taken = await prisma.user.findUnique({
       where: { email: normalizedEmail },
     });
-    if (taken && taken.id !== req.session.user.id)
+    if (taken && taken.id !== req.user.id)
       return res.status(409).json({ error: "EMAIL_ALREADY_EXISTS" });
     await prisma.user.update({
-      where: { id: req.session.user.id },
+      where: { id: req.user.id },
       data: { email: normalizedEmail, emailVerifiedAt: null },
     });
     const token = randomToken(32);
     await prisma.user.update({
-      where: { id: req.session.user.id },
+      where: { id: req.user.id },
       data: {
         emailVerificationTokenHash: sha256Hex(token),
         emailVerificationExpiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
@@ -551,7 +540,7 @@ router.post("/telegram/verify", async (req, res) => {
         data: updateData,
       });
     }
-    req.session.user = publicUser(user);
+    req.user = publicUser(user);
     // Issue JWTs for Telegram login as well
     const accessToken = signAccessToken(user);
     const { token: refreshToken, jti, exp } = signRefreshToken(user);
@@ -603,7 +592,7 @@ router.post("/telegram/link", requireAuth, async (req, res) => {
     const firstName = authData.first_name || null;
     const lastName = authData.last_name || null;
 
-    const meId = req.session.user.id;
+    const meId = req.user.id;
     const existing = await prisma.user.findUnique({ where: { telegramId } });
 
     // If another user already has this telegramId, merge that user into current user
@@ -740,7 +729,7 @@ router.post("/telegram/link", requireAuth, async (req, res) => {
       });
 
       resolvedExisting = merged;
-      req.session.user = publicUser(merged);
+      req.user = publicUser(merged);
       try {
         clearCache(`favorites:${meId}`);
         clearCache(`favorites:${otherId}`);
@@ -750,18 +739,18 @@ router.post("/telegram/link", requireAuth, async (req, res) => {
 
     // Normal path: link telegram to current account
     const updateData = { telegramId, telegramUsername, telegramPhotoUrl };
-    if (!req.session.user.name && name) updateData.name = name;
-    if (!req.session.user.firstName && firstName)
+    if (!req.user.name && name) updateData.name = name;
+    if (!req.user.firstName && firstName)
       updateData.firstName = firstName;
-    if (!req.session.user.lastName && lastName) updateData.lastName = lastName;
-    if (!req.session.user.avatarPath && telegramPhotoUrl) {
+    if (!req.user.lastName && lastName) updateData.lastName = lastName;
+    if (!req.user.avatarPath && telegramPhotoUrl) {
       updateData.avatarPath = null;
     }
 
     if (
       !existing &&
-      !req.session.user.email &&
-      req.session.user.id &&
+      !req.user.email &&
+      req.user.id &&
       telegramId
     ) {
       // Попробуем найти "телеграм-" аккаунт без email, чтобы его объединить
@@ -871,7 +860,7 @@ router.post("/telegram/link", requireAuth, async (req, res) => {
         });
 
         if (merged) {
-          req.session.user = publicUser(merged);
+          req.user = publicUser(merged);
           try {
             clearCache(`favorites:${meId}`);
             clearCache(`favorites:${orphan.id}`);
@@ -885,7 +874,7 @@ router.post("/telegram/link", requireAuth, async (req, res) => {
       where: { id: meId },
       data: updateData,
     });
-    req.session.user = publicUser(user);
+    req.user = publicUser(user);
     try {
       clearCache(`favorites:${meId}`);
     } catch {}
@@ -900,7 +889,7 @@ router.post("/telegram/unlink", requireAuth, async (req, res) => {
   const prisma = req.app.locals.prisma;
   try {
     const me = await prisma.user.findUnique({
-      where: { id: req.session.user.id },
+      where: { id: req.user.id },
     });
     if (!me) return res.status(404).json({ error: "USER_NOT_FOUND" });
 
@@ -919,7 +908,7 @@ router.post("/telegram/unlink", requireAuth, async (req, res) => {
         telegramPhotoUrl: null,
       },
     });
-    req.session.user = publicUser(updated);
+    req.user = publicUser(updated);
     try {
       clearCache(`favorites:${me.id}`);
     } catch {}

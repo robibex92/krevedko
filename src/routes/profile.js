@@ -8,7 +8,7 @@ const router = Router();
 router.get("/profile/me", requireAuth, async (req, res) => {
   const prisma = req.app.locals.prisma;
   try {
-    const userId = req.session.user.id;
+    const userId = req.user.id;
     const [user, orders] = await Promise.all([
       prisma.user.findUnique({
         where: { id: userId },
@@ -106,8 +106,8 @@ router.patch("/profile", requireAuth, async (req, res) => {
       } else {
         const fn = data.firstName !== undefined ? data.firstName : undefined;
         const ln = data.lastName !== undefined ? data.lastName : undefined;
-        const first = fn !== undefined ? fn : req.session.user.firstName;
-        const last = ln !== undefined ? ln : req.session.user.lastName;
+        const first = fn !== undefined ? fn : req.user.firstName;
+        const last = ln !== undefined ? ln : req.user.lastName;
         const combined = [first, last].filter(Boolean).join(" ") || null;
         data.name = combined;
       }
@@ -117,10 +117,10 @@ router.patch("/profile", requireAuth, async (req, res) => {
       return res.status(400).json({ error: "NO_PROFILE_UPDATES" });
 
     const user = await prisma.user.update({
-      where: { id: req.session.user.id },
+      where: { id: req.user.id },
       data,
     });
-    req.session.user = publicUser(user);
+    req.user = publicUser(user);
     res.json({ user: publicUser(user) });
   } catch (err) {
     console.error(err);
@@ -139,7 +139,7 @@ router.post(
         ip: req.ip,
         contentType: req.headers["content-type"],
         contentLength: req.headers["content-length"],
-        userId: req.session.user?.id,
+        userId: req.user?.id,
         uploadLimitMb: Number(process.env.UPLOAD_LIMIT_MB) || 5,
       });
     } catch {}
@@ -181,10 +181,10 @@ router.post(
 
       const relPath = ["avatars", req.file.filename].join("/");
       const user = await prisma.user.update({
-        where: { id: req.session.user.id },
+        where: { id: req.user.id },
         data: { avatarPath: relPath },
       });
-      req.session.user = publicUser(user);
+      req.user = publicUser(user);
       res.json({ avatarPath: relPath });
     } catch (err) {
       console.error("[upload/avatar] handler error", err);

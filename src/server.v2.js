@@ -10,6 +10,7 @@ import { fileURLToPath } from "url";
 import fs from "fs";
 import rateLimit from "express-rate-limit";
 import { PrismaClient } from "@prisma/client";
+import passport from "passport";
 
 // New architecture imports
 import { configureContainer } from "./config/container.config.js";
@@ -18,6 +19,12 @@ import {
   notFoundHandler,
 } from "./core/middleware/errorHandler.js";
 import { createV2Routes, createAuthRoutes } from "./routes/v2/index.js";
+import { createOAuthRoutes } from "./routes/v2/oauth.routes.js";
+
+// OAuth strategies
+import { configureGoogleStrategy } from "./auth/strategies/google.strategy.js";
+import { configureYandexStrategy } from "./auth/strategies/yandex.strategy.js";
+import { configureMailRuStrategy } from "./auth/strategies/mailru.strategy.js";
 
 // Old routes (backward compatibility - will be removed after full migration)
 // import authRouter from "./routes/auth.js"; // MIGRATED to v2
@@ -49,6 +56,12 @@ const prisma = new PrismaClient();
 
 // Configure DI Container (prisma is now only accessible through DI)
 const container = configureContainer(prisma);
+
+// Configure Passport.js OAuth strategies
+const oauthService = container.resolve("oauthService");
+configureGoogleStrategy(passport, oauthService);
+configureYandexStrategy(passport, oauthService);
+configureMailRuStrategy(passport, oauthService);
 
 // App locals (legacy support - will be removed gradually)
 app.locals.prisma = prisma; // ✅ Required for legacy routes (auth, cart, favorites, etc.)
@@ -95,6 +108,9 @@ app.options(
 
 app.use(cookieParser());
 
+// Initialize Passport (for OAuth)
+app.use(passport.initialize());
+
 // Static files
 app.use(
   "/uploads",
@@ -133,7 +149,8 @@ app.use((req, res, next) => {
     req.path === "/api/auth/register" ||
     req.path === "/api/auth/telegram/verify" ||
     req.path === "/api/auth/logout" ||
-    req.path === "/api/test-upload"
+    req.path === "/api/test-upload" ||
+    req.path.startsWith("/api/auth/oauth/") // Skip CSRF for OAuth
   ) {
     return next();
   }
@@ -173,6 +190,9 @@ app.post("/api/test-upload", productUpload.single("image"), (req, res) => {
 
 // NEW V2 ROUTES (with layered architecture)
 app.use("/api", createV2Routes(container));
+
+// OAuth routes (Google, Yandex, Mail.ru)
+app.use("/api", createOAuthRoutes(container));
 
 // OLD ROUTES (backward compatibility - MIGRATED to v2)
 // app.use("/api", adminRouter);

@@ -102,7 +102,7 @@ router.post("/admin/recipes", requireAuth, requireAdmin, async (req, res) => {
     const normalizedContent = normalizeRecipeContent(content);
     const now = new Date();
     const effectiveStatus = publish ? "PUBLISHED" : status || "DRAFT";
-    const authorId = req.session.user.id;
+    const authorId = req.user.id;
     const finalSlug = await ensureRecipeSlug(prisma, slug || title);
     const created = await prisma.recipe.create({
       data: {
@@ -845,7 +845,19 @@ router.get("/admin/orders", requireAuth, requireAdmin, async (req, res) => {
           },
         },
         collection: { select: { id: true, title: true } },
-        items: true,
+        items: {
+          include: {
+            product: {
+              select: {
+                id: true,
+                title: true,
+                imagePath: true,
+                unitLabel: true,
+                priceKopecks: true,
+              },
+            },
+          },
+        },
         proofs: true,
       },
       orderBy: { submittedAt: "desc" },
@@ -856,6 +868,7 @@ router.get("/admin/orders", requireAuth, requireAdmin, async (req, res) => {
       items: order.items.map((item) => ({
         ...item,
         quantityDecimal: item.quantityDecimal.toString(),
+        product: item.product, // Сохраняем данные о товаре
       })),
     }));
     res.json({ orders: normalizedOrders });

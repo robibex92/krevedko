@@ -51,6 +51,11 @@ model User {
   createdAt                  DateTime  @default(now())
   updatedAt                  DateTime  @updatedAt
 
+  // OAuth поля (для быстрого поиска)
+  googleId                   String?   @unique
+  yandexId                   String?   @unique
+  mailruId                   String?   @unique
+
   cartItems     CartItem[]
   orders        Order[]
   favorites     Favorite[]
@@ -62,6 +67,7 @@ model User {
   refreshTokens RefreshToken[]
   recipes       Recipe[]
   notificationStatuses UserNotificationStatus[]
+  oauthAccounts OAuthAccount[]
 }
 
 model Collection {
@@ -129,7 +135,8 @@ model CollectionProduct {
 
 model CartItem {
   id               Int      @id @default(autoincrement())
-  userId           Int
+  userId           Int?     // ← Теперь опциональный для guest
+  sessionId        String?  // ← Для guest корзин (когда userId = null)
   collectionId     Int
   productId        Int
   quantityDecimal  Decimal
@@ -138,16 +145,21 @@ model CartItem {
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 
-  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user       User?      @relation(fields: [userId], references: [id], onDelete: Cascade)
   collection Collection @relation(fields: [collectionId], references: [id], onDelete: Cascade)
   product    Product    @relation(fields: [productId], references: [id], onDelete: Cascade)
 
+  // Уникальность для авторизованных (userId + collectionId + productId)
   @@unique([userId, collectionId, productId])
+  // Уникальность для guest (sessionId + collectionId + productId)
+  @@index([sessionId, collectionId, productId])
+  @@index([sessionId])
 }
 
 model Order {
   id              Int      @id @default(autoincrement())
-  userId          Int
+  userId          Int?     // ← Теперь опциональный для guest orders
+  sessionId       String?  // ← Для guest orders (когда userId = null)
   collectionId    Int
   status          String   @default("SUBMITTED") // "SUBMITTED" | "PAID" | "CANCELLED"
   totalKopecks    Int
@@ -160,11 +172,24 @@ model Order {
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
-  user       User           @relation(fields: [userId], references: [id], onDelete: Restrict)
+  // Guest checkout поля
+  isGuestOrder       Boolean @default(false) // true если userId = null
+  guestName          String? // Имя guest пользователя
+  guestPhone         String? // Телефон для связи
+  guestEmail         String? // Email для связи
+  guestContactMethod String? // "phone" | "email" | "telegram" | "custom"
+  guestContactInfo   String? @db.Text // Контакт в свободной форме
+
+  user       User?          @relation(fields: [userId], references: [id], onDelete: Restrict)
   collection Collection     @relation(fields: [collectionId], references: [id], onDelete: Restrict)
   items      OrderItem[]
   proofs     PaymentProof[]
   payments   Payment[]      // Связь с платежами
+
+  @@index([sessionId])
+  @@index([isGuestOrder])
+  @@index([guestPhone])
+  @@index([guestEmail])
 }
 
 model OrderItem {
@@ -444,4 +469,29 @@ model TelegramMessageQueue {
 
   @@index([status, scheduledFor])
   @@index([messageType])
+}
+
+model OAuthAccount {
+  id              Int       @id @default(autoincrement())
+  userId          Int
+  provider        String    // "google" | "yandex" | "mailru"
+  providerId      String    // ID пользователя у провайдера
+  email           String?
+  displayName     String?
+  firstName       String?
+  lastName        String?
+  avatarUrl       String?
+  accessToken     String?   @db.Text
+  refreshToken    String?   @db.Text
+  expiresAt       DateTime?
+  metadata        Json?     // Дополнительные данные от провайдера
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerId])
+  @@index([userId])
+  @@index([provider])
+  @@index([email])
 }

@@ -37,7 +37,7 @@ router.post("/cart/submit", requireAuth, async (req, res) => {
     const transactionResult = await prisma.$transaction(async (tx) => {
       const createdOrders = [];
       for (const target of selection) {
-        const items = await tx.cartItem.findMany({ where: { userId: req.session.user.id, collectionId: target.collection.id }, include: { product: true }, orderBy: { id: "asc" } });
+        const items = await tx.cartItem.findMany({ where: { userId: req.user.id, collectionId: target.collection.id }, include: { product: true }, orderBy: { id: "asc" } });
         if (!items.length) {
           const err = new Error("CART_EMPTY");
           err.meta = { collectionId: target.collection.id };
@@ -68,7 +68,7 @@ router.post("/cart/submit", requireAuth, async (req, res) => {
         const deliveryCost = deliveryType === "DELIVERY" && total.lt(300000) ? 0 : 0;
         const finalTotal = total.add(dec(deliveryCost));
 
-        const order = await tx.order.create({ data: { userId: req.session.user.id, collectionId: target.collection.id, status: "SUBMITTED", totalKopecks: finalTotal.toNumber(), deliveryType, deliveryAddress: deliveryType === "DELIVERY" ? (target.deliveryAddress || null) : null, deliveryCost } });
+        const order = await tx.order.create({ data: { userId: req.user.id, collectionId: target.collection.id, status: "SUBMITTED", totalKopecks: finalTotal.toNumber(), deliveryType, deliveryAddress: deliveryType === "DELIVERY" ? (target.deliveryAddress || null) : null, deliveryCost } });
 
         const orderNumber = makeOrderNumber(order.id);
         const orderWithNumber = await tx.order.update({ where: { id: order.id }, data: { orderNumber } });
@@ -89,7 +89,7 @@ router.post("/cart/submit", requireAuth, async (req, res) => {
           });
         }
 
-        await tx.cartItem.deleteMany({ where: { userId: req.session.user.id, collectionId: target.collection.id } });
+        await tx.cartItem.deleteMany({ where: { userId: req.user.id, collectionId: target.collection.id } });
         createdOrders.push(orderWithNumber);
       }
       return createdOrders;
@@ -101,7 +101,7 @@ router.post("/cart/submit", requireAuth, async (req, res) => {
       const { TELEGRAM_BOT_TOKEN, TELEGRAM_BOT_USERNAME } = process.env;
       if (TELEGRAM_BOT_TOKEN && TELEGRAM_BOT_USERNAME && ADMIN_TELEGRAM_ID) {
         // Load fresh user for richer data
-        const user = await prisma.user.findUnique({ where: { id: req.session.user.id } });
+        const user = await prisma.user.findUnique({ where: { id: req.user.id } });
         const fullName = [user?.firstName, user?.lastName].filter(Boolean).join(" ") || user?.name || "Пользователь";
         const tgLine = user?.telegramUsername ? `@${user.telegramUsername}` : "аккаунт создан через почту";
         const linesFor = (ord) => [
@@ -136,7 +136,7 @@ router.post("/cart/submit", requireAuth, async (req, res) => {
 router.get("/orders", requireAuth, async (req, res) => {
   const prisma = req.app.locals.prisma;
   try {
-    const orders = await prisma.order.findMany({ where: { userId: req.session.user.id }, orderBy: { submittedAt: "desc" }, select: { id: true, collectionId: true, status: true, totalKopecks: true, submittedAt: true, orderNumber: true } });
+    const orders = await prisma.order.findMany({ where: { userId: req.user.id }, orderBy: { submittedAt: "desc" }, select: { id: true, collectionId: true, status: true, totalKopecks: true, submittedAt: true, orderNumber: true } });
     const normalized = orders.map((order) => ({ ...order, orderNumber: order.orderNumber || makeOrderNumber(order.id) }));
     res.json({ orders: normalized });
   } catch (err) {
@@ -150,7 +150,7 @@ router.get("/orders/:id", requireAuth, async (req, res) => {
   const prisma = req.app.locals.prisma;
   try {
     const id = Number(req.params.id);
-    const order = await prisma.order.findFirst({ where: { id, userId: req.session.user.id }, include: { items: true, proofs: true } });
+    const order = await prisma.order.findFirst({ where: { id, userId: req.user.id }, include: { items: true, proofs: true } });
     if (!order) return res.status(404).json({ error: "ORDER_NOT_FOUND" });
     order.orderNumber = order.orderNumber || makeOrderNumber(order.id);
     const items = order.items.map((it) => ({ ...it, quantityDecimal: it.quantityDecimal.toString() }));
@@ -166,7 +166,7 @@ router.post("/orders/:id/payment-proof", requireAuth, paymentUpload.single("imag
   const prisma = req.app.locals.prisma;
   try {
     const id = Number(req.params.id);
-    const order = await prisma.order.findFirst({ where: { id, userId: req.session.user.id } });
+    const order = await prisma.order.findFirst({ where: { id, userId: req.user.id } });
     if (!order) return res.status(404).json({ error: "ORDER_NOT_FOUND" });
     if (!req.file) return res.status(400).json({ error: "NO_FILE" });
 
@@ -184,7 +184,7 @@ router.post("/orders/:id/repeat", requireAuth, async (req, res) => {
   const prisma = req.app.locals.prisma;
   try {
     const id = Number(req.params.id);
-    const order = await prisma.order.findFirst({ where: { id, userId: req.session.user.id }, include: { items: true } });
+    const order = await prisma.order.findFirst({ where: { id, userId: req.user.id }, include: { items: true } });
     if (!order) return res.status(404).json({ error: "ORDER_NOT_FOUND" });
 
     const targetCollectionInput = req.body?.collection_id ?? req.body?.collectionId ?? req.query?.collection_id;
@@ -211,9 +211,9 @@ router.post("/orders/:id/repeat", requireAuth, async (req, res) => {
         if (qty.lte(0)) continue;
         const price = resolved?.priceOverrideKopecks ?? prod.priceKopecks;
         await tx.cartItem.upsert({
-          where: { userId_collectionId_productId: { userId: req.session.user.id, collectionId: targetCollection.id, productId } },
+          where: { userId_collectionId_productId: { userId: req.user.id, collectionId: targetCollection.id, productId } },
           update: { quantityDecimal: qty.toString(), unitPriceKopecks: price },
-          create: { userId: req.session.user.id, collectionId: targetCollection.id, productId, quantityDecimal: qty.toString(), unitPriceKopecks: price },
+          create: { userId: req.user.id, collectionId: targetCollection.id, productId, quantityDecimal: qty.toString(), unitPriceKopecks: price },
         });
       }
     });

@@ -1,8 +1,22 @@
 import crypto from "crypto";
-import FormData from "form-data";
-import fs from "fs";
+import fs from "fs/promises";
 import path from "path";
 import { BusinessLogicError } from "../core/errors/AppError.js";
+
+// Проверка доступности File API (Node.js 20+)
+let FileAPI;
+try {
+  FileAPI = (await import("node:buffer")).File;
+} catch {
+  // Fallback для Node.js 18-19: создаем простую обертку
+  FileAPI = class File extends Blob {
+    constructor(bits, name, options = {}) {
+      super(bits, options);
+      this.name = name;
+      this.lastModified = Date.now();
+    }
+  };
+}
 
 const { TELEGRAM_BOT_TOKEN } = process.env;
 
@@ -102,18 +116,26 @@ export async function sendTelegramPhoto(
       body: JSON.stringify(body),
     });
   } else {
+    // Используем встроенный FormData (Node.js 20+)
     const formData = new FormData();
-    formData.append("chat_id", chatId);
-    formData.append("photo", fs.createReadStream(photoPath));
+    formData.append("chat_id", String(chatId));
+    
+    // Читаем файл в Buffer и создаем File объект (Node.js 20+)
+    const fileBuffer = await fs.readFile(photoPath);
+    const fileName = path.basename(photoPath);
+    
+    // Создаем File объект (Node.js 20+) или Blob с именем (fallback)
+    const file = new FileAPI([fileBuffer], fileName, { type: "image/jpeg" });
+    formData.append("photo", file, fileName);
+    
     if (caption) formData.append("caption", caption);
     formData.append("parse_mode", options.parseMode || "HTML");
     if (options.threadId)
-      formData.append("message_thread_id", options.threadId);
+      formData.append("message_thread_id", String(options.threadId));
 
     res = await fetchImpl(url, {
       method: "POST",
       body: formData,
-      headers: formData.getHeaders(),
     });
   }
 
@@ -199,9 +221,10 @@ export async function editTelegramMessageMedia(
   const fetchImpl = await ensureFetch();
   const url = `https://api.telegram.org/bot${token}/editMessageMedia`;
 
+  // Используем встроенный FormData (Node.js 20+)
   const formData = new FormData();
-  formData.append("chat_id", chatId);
-  formData.append("message_id", messageId);
+  formData.append("chat_id", String(chatId));
+  formData.append("message_id", String(messageId));
 
   const media = {
     type: "photo",
@@ -213,12 +236,16 @@ export async function editTelegramMessageMedia(
   }
 
   formData.append("media", JSON.stringify(media));
-  formData.append("photo", fs.createReadStream(photoPath));
+  
+  // Читаем файл в Buffer и создаем File объект (Node.js 20+) или Blob (fallback)
+  const fileBuffer = await fs.readFile(photoPath);
+  const fileName = path.basename(photoPath);
+  const file = new FileAPI([fileBuffer], fileName, { type: "image/jpeg" });
+  formData.append("photo", file, fileName);
 
   const res = await fetchImpl(url, {
     method: "POST",
     body: formData,
-    headers: formData.getHeaders(),
   });
 
   if (!res.ok) {

@@ -196,4 +196,21 @@ export class OrderController extends BaseController {
 
     return this.success(res, { order });
   }
+
+  /**
+   * Create order from guest cart (for unauthenticated users)
+   * POST /api/orders/guest
+   */
+  async createGuestOrder(req, res) {
+    const { sessionId, collectionId, guestData, deliveryData } = req.body;
+
+    const order = await this.orderService.createGuestOrder(
+      sessionId,
+      collectionId,
+      guestData,
+      deliveryData
+    );
+
+    return this.success(res, { order }, "Guest order created successfully");
+  }
 }

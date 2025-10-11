@@ -112,10 +112,23 @@ export class OrderRepository extends BaseRepository {
               title: true,
             },
           },
-          items: true,
+          items: {
+            include: {
+              product: {
+                select: {
+                  id: true,
+                  title: true,
+                  imagePath: true,
+                  unitLabel: true,
+                  priceKopecks: true,
+                  isActive: true,
+                },
+              },
+            },
+          },
           proofs: true,
         },
-        orderBy: { submittedAt: "desc" },
+        orderBy: { createdAt: "desc" },
         ...options,
       }
     );

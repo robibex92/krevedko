@@ -60,10 +60,7 @@ function resolveUserId(sub) {
 }
 
 export async function requireAuth(req, res, next) {
-  // 1) Session-based auth (backward compatibility)
-  if (req.session?.user) return next();
-
-  // 2) Bearer token (JWT) in Authorization header
+  // JWT-based auth only (session removed)
   try {
     const authz = req.headers["authorization"] || req.headers["Authorization"];
     if (!authz || !authz.toString().startsWith("Bearer ")) {
@@ -77,9 +74,9 @@ export async function requireAuth(req, res, next) {
     if (!prisma) return res.status(500).json({ error: "PRISMA_NOT_AVAILABLE" });
     const user = await prisma.user.findUnique({ where: { id: userId } });
     if (!user) return res.status(401).json({ error: "UNAUTHORIZED" });
-    // To not refactor routes, populate session-like shape
-    req.session = req.session || {};
-    req.session.user = publicUser(user);
+    
+    // Устанавливаем req.user вместо req.session.user
+    req.user = publicUser(user);
     return next();
   } catch {
     return res.status(401).json({ error: "UNAUTHORIZED" });
@@ -87,7 +84,7 @@ export async function requireAuth(req, res, next) {
 }
 
 export function requireAdmin(req, res, next) {
-  if (req.session?.user?.role === "ADMIN") return next();
+  if (req.user?.role === "ADMIN") return next();
   return res.status(403).json({ error: "FORBIDDEN" });
 }
 

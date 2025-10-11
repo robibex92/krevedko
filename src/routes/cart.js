@@ -33,7 +33,7 @@ router.get("/cart", requireAuth, async (req, res) => {
 
     for (const col of targetCollections) {
       const items = await prisma.cartItem.findMany({
-        where: { userId: req.session.user.id, collectionId: col.id },
+        where: { userId: req.user.id, collectionId: col.id },
         include: { product: true },
         orderBy: { id: "asc" },
       });
@@ -126,9 +126,9 @@ router.post("/cart/items", requireAuth, async (req, res) => {
     if (!subtotal.mod(1).eq(0)) return res.status(400).json({ error: "PRICE_STEP_MISMATCH" });
 
     const item = await prisma.cartItem.upsert({
-      where: { userId_collectionId_productId: { userId: req.session.user.id, collectionId: collection.id, productId } },
+      where: { userId_collectionId_productId: { userId: req.user.id, collectionId: collection.id, productId } },
       update: { quantityDecimal: quantityStr, unitPriceKopecks: resolved.price, isActive: true },
-      create: { userId: req.session.user.id, collectionId: collection.id, productId, quantityDecimal: quantityStr, unitPriceKopecks: resolved.price, isActive: true },
+      create: { userId: req.user.id, collectionId: collection.id, productId, quantityDecimal: quantityStr, unitPriceKopecks: resolved.price, isActive: true },
     });
 
     res.status(201).json({ itemId: item.id });
@@ -146,7 +146,7 @@ router.patch("/cart/items/:id", requireAuth, async (req, res) => {
     const { quantity } = req.body || {};
     const quantityStr = String(quantity);
 
-    const existing = await prisma.cartItem.findFirst({ where: { id, userId: req.session.user.id }, include: { product: true, collection: true } });
+    const existing = await prisma.cartItem.findFirst({ where: { id, userId: req.user.id }, include: { product: true, collection: true } });
     if (!existing) return res.status(404).json({ error: "CART_ITEM_NOT_FOUND" });
     if (existing.collection.status !== "ACTIVE") return res.status(400).json({ error: "COLLECTION_NOT_ACTIVE" });
 
@@ -176,7 +176,7 @@ router.delete("/cart/items/:id", requireAuth, async (req, res) => {
   const prisma = req.app.locals.prisma;
   try {
     const id = Number(req.params.id);
-    const existing = await prisma.cartItem.findFirst({ where: { id, userId: req.session.user.id } });
+    const existing = await prisma.cartItem.findFirst({ where: { id, userId: req.user.id } });
     if (!existing) return res.status(404).json({ error: "CART_ITEM_NOT_FOUND" });
     await prisma.cartItem.delete({ where: { id } });
     res.json({ ok: true });
@@ -193,7 +193,7 @@ router.get("/cart/count", requireAuth, async (req, res) => {
     const activeCollections = await getActiveCollections(prisma);
     if (!activeCollections.length) return res.json({ count: 0 });
     const ids = activeCollections.map((c) => c.id);
-    const count = await prisma.cartItem.count({ where: { userId: req.session.user.id, collectionId: { in: ids } } });
+    const count = await prisma.cartItem.count({ where: { userId: req.user.id, collectionId: { in: ids } } });
     res.json({ count });
   } catch (err) {
     console.error(err);
@@ -205,7 +205,7 @@ router.get("/cart/count", requireAuth, async (req, res) => {
 router.get("/cart/saved", requireAuth, async (req, res) => {
   const prisma = req.app.locals.prisma;
   try {
-    const count = await prisma.cartItem.count({ where: { userId: req.session.user.id } });
+    const count = await prisma.cartItem.count({ where: { userId: req.user.id } });
     res.json({ saved: count > 0 });
   } catch (err) {
     console.error(err);

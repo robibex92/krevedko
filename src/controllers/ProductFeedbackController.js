@@ -98,7 +98,7 @@ export class ProductFeedbackController extends BaseController {
    */
   deleteComment = async (req, res) => {
     const userId = this.getUserId(req);
-    const userRole = req.session?.user?.role || "USER";
+    const userRole = req.user?.role || "USER";
     const commentId = this.getIdParam(req);
 
     const result = await this.feedbackService.deleteComment(

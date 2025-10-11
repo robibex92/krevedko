@@ -350,4 +350,211 @@ export class OrderService {
       }
     }
   }
+
+  /**
+   * Create order from guest cart (for unauthenticated users)
+   * @param {string} sessionId - Guest session ID
+   * @param {number} collectionId - Collection ID
+   * @param {Object} guestData - Guest contact data
+   * @param {string} guestData.name - Guest name (optional)
+   * @param {string} guestData.phone - Guest phone (optional)
+   * @param {string} guestData.email - Guest email (optional)
+   * @param {string} guestData.contactMethod - Contact method ("phone"|"email"|"telegram"|"custom")
+   * @param {string} guestData.contactInfo - Free-form contact info
+   * @param {Object} deliveryData - Delivery information
+   */
+  async createGuestOrder(sessionId, collectionId, guestData, deliveryData) {
+    // Validate sessionId
+    if (!sessionId) {
+      throw new ValidationError("sessionId is required");
+    }
+
+    // Validate guest contact data
+    if (!guestData || !guestData.contactMethod) {
+      throw new ValidationError("Guest contact method is required");
+    }
+
+    // Ensure at least one contact method is provided
+    const hasContact =
+      guestData.phone ||
+      guestData.email ||
+      guestData.contactInfo ||
+      guestData.telegram;
+
+    if (!hasContact) {
+      throw new ValidationError("At least one contact method must be provided");
+    }
+
+    // Get guest cart items
+    const cartItems = await this.orderRepo.prisma.cartItem.findMany({
+      where: {
+        sessionId,
+        collectionId,
+        isActive: true,
+      },
+      include: { product: true },
+    });
+
+    if (!cartItems.length) {
+      throw new BusinessLogicError("Cart is empty", "CART_EMPTY");
+    }
+
+    // Validate collection is active
+    const collection = await this.collectionRepo.findByIdOrFail(collectionId);
+    if (collection.status !== COLLECTION_STATUS.ACTIVE) {
+      throw new BusinessLogicError(
+        "Collection is not active",
+        "COLLECTION_NOT_ACTIVE"
+      );
+    }
+
+    // Prepare and validate order items
+    const { items, total } = await this._prepareOrderItems(
+      cartItems,
+      collectionId
+    );
+
+    // Calculate delivery cost
+    const deliveryCost = this._calculateDeliveryCost(
+      deliveryData.deliveryType,
+      total
+    );
+    const finalTotal = total.add(dec(deliveryCost));
+
+    // Generate order number
+    const orderNumber = this._generateOrderNumber();
+
+    // Create order in transaction
+    const order = await this.orderRepo.prisma.$transaction(async (tx) => {
+      // Create order
+      const createdOrder = await tx.order.create({
+        data: {
+          userId: null, // Guest order
+          sessionId,
+          collectionId,
+          status: "SUBMITTED",
+          totalKopecks: finalTotal.toNumber(),
+          deliveryType: deliveryData.deliveryType || "PICKUP",
+          deliveryAddress: deliveryData.deliveryAddress || null,
+          deliveryCost,
+          paymentMethod: deliveryData.paymentMethod || "development",
+          orderNumber,
+          // Guest data
+          isGuestOrder: true,
+          guestName: guestData.name || null,
+          guestPhone: guestData.phone || null,
+          guestEmail: guestData.email || null,
+          guestContactMethod: guestData.contactMethod,
+          guestContactInfo: guestData.contactInfo || null,
+        },
+      });
+
+      // Create order items and update stock
+      for (const item of items) {
+        await tx.orderItem.create({
+          data: {
+            orderId: createdOrder.id,
+            productId: item.productId,
+            titleSnapshot: item.titleSnapshot,
+            unitLabelSnapshot: item.unitLabelSnapshot,
+            quantityDecimal: item.quantityDecimal,
+            unitPriceKopecks: item.unitPriceKopecks,
+            subtotalKopecks: item.subtotalKopecks,
+            imagePathSnapshot: item.imagePathSnapshot,
+          },
+        });
+
+        // Decrease stock
+        await this.inventoryService.decreaseStock(
+          tx,
+          item.productId,
+          item.quantityDecimal
+        );
+      }
+
+      // Clear guest cart
+      await tx.cartItem.deleteMany({
+        where: { sessionId, collectionId },
+      });
+
+      return createdOrder;
+    });
+
+    return order;
+  }
+
+  /**
+   * Get guest order by sessionId and orderId
+   */
+  async getGuestOrderDetails(sessionId, orderId) {
+    if (!sessionId) {
+      throw new ValidationError("sessionId is required");
+    }
+
+    const order = await this.orderRepo.findWithDetails(orderId);
+
+    if (!order) {
+      throw new BusinessLogicError("Order not found", "ORDER_NOT_FOUND");
+    }
+
+    // Check ownership by sessionId
+    if (order.sessionId !== sessionId || !order.isGuestOrder) {
+      throw new BusinessLogicError("Order not found", "ORDER_NOT_FOUND");
+    }
+
+    return order;
+  }
+
+  /**
+   * Get all orders by sessionId (for guest)
+   */
+  async getGuestOrders(sessionId) {
+    if (!sessionId) {
+      return [];
+    }
+
+    return this.orderRepo.findMany(
+      {
+        sessionId,
+        isGuestOrder: true,
+      },
+      {
+        include: {
+          collection: { select: { id: true, title: true } },
+          items: {
+            include: {
+              product: {
+                select: { id: true, title: true, imagePath: true },
+              },
+            },
+          },
+        },
+        orderBy: { createdAt: "desc" },
+      }
+    );
+  }
+
+  /**
+   * Migrate guest orders to user (after registration/login)
+   */
+  async migrateGuestOrdersToUser(sessionId, userId) {
+    if (!sessionId || !userId) {
+      throw new ValidationError("sessionId and userId are required");
+    }
+
+    const result = await this.orderRepo.prisma.order.updateMany({
+      where: {
+        sessionId,
+        isGuestOrder: true,
+        userId: null,
+      },
+      data: {
+        userId,
+        isGuestOrder: false,
+        sessionId: null, // Clear sessionId after migration
+      },
+    });
+
+    return { migrated: result.count };
+  }
 }

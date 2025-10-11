@@ -36,6 +36,7 @@ export class CartController extends BaseController {
    */
   async addItem(req, res) {
     const userId = this.getUserId(req);
+
     const { product_id, quantity, collection_id } = req.body || {};
 
     // Validate required fields

@@ -8,11 +8,11 @@ const router = Router();
 router.get("/favorites", requireAuth, async (req, res) => {
   const prisma = req.app.locals.prisma;
   try {
-    const cacheKey = `favorites:${req.session.user.id}`;
+    const cacheKey = `favorites:${req.user.id}`;
     const cached = getCached(cacheKey);
     if (cached) return res.json({ products: cached });
 
-    const favorites = await prisma.favorite.findMany({ where: { userId: req.session.user.id }, include: { product: true }, orderBy: { createdAt: "desc" } });
+    const favorites = await prisma.favorite.findMany({ where: { userId: req.user.id }, include: { product: true }, orderBy: { createdAt: "desc" } });
 
     const products = favorites.map((fav) => ({
       id: fav.product.id,
@@ -44,11 +44,11 @@ router.post("/favorites", requireAuth, async (req, res) => {
     const productId = Number(product_id);
     if (!productId) return res.status(400).json({ error: "PRODUCT_ID_REQUIRED" });
     const favorite = await prisma.favorite.upsert({
-      where: { userId_productId: { userId: req.session.user.id, productId } },
+      where: { userId_productId: { userId: req.user.id, productId } },
       update: {},
-      create: { userId: req.session.user.id, productId },
+      create: { userId: req.user.id, productId },
     });
-    clearCache(`favorites:${req.session.user.id}`);
+    clearCache(`favorites:${req.user.id}`);
     res.status(201).json({ favorite });
   } catch (err) {
     console.error(err);
@@ -61,8 +61,8 @@ router.delete("/favorites/:productId", requireAuth, async (req, res) => {
   const prisma = req.app.locals.prisma;
   try {
     const productId = Number(req.params.productId);
-    await prisma.favorite.deleteMany({ where: { userId: req.session.user.id, productId } });
-    clearCache(`favorites:${req.session.user.id}`);
+    await prisma.favorite.deleteMany({ where: { userId: req.user.id, productId } });
+    clearCache(`favorites:${req.user.id}`);
     res.json({ ok: true });
   } catch (err) {
     console.error(err);

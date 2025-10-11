@@ -28,9 +28,9 @@ router.post("/products/:id/reviews", requireAuth, async (req, res) => {
     if (!rating || rating < 1 || rating > 5) return res.status(400).json({ error: "INVALID_RATING" });
 
     const review = await prisma.review.upsert({
-      where: { userId_productId: { userId: req.session.user.id, productId } },
+      where: { userId_productId: { userId: req.user.id, productId } },
       update: { rating: Number(rating), comment: comment || null },
-      create: { userId: req.session.user.id, productId, rating: Number(rating), comment: comment || null },
+      create: { userId: req.user.id, productId, rating: Number(rating), comment: comment || null },
     });
     res.status(201).json({ review });
   } catch (err) {
@@ -43,7 +43,7 @@ router.delete("/products/:id/reviews", requireAuth, async (req, res) => {
   const prisma = req.app.locals.prisma;
   try {
     const productId = Number(req.params.id);
-    await prisma.review.deleteMany({ where: { userId: req.session.user.id, productId } });
+    await prisma.review.deleteMany({ where: { userId: req.user.id, productId } });
     res.json({ ok: true });
   } catch (err) {
     console.error(err);
@@ -74,7 +74,7 @@ router.post("/products/:id/comments", requireAuth, async (req, res) => {
     const productId = Number(req.params.id);
     const { content } = req.body || {};
     if (!content || content.trim().length === 0) return res.status(400).json({ error: "CONTENT_REQUIRED" });
-    const comment = await prisma.comment.create({ data: { userId: req.session.user.id, productId, content: content.trim() } });
+    const comment = await prisma.comment.create({ data: { userId: req.user.id, productId, content: content.trim() } });
     res.status(201).json({ comment });
   } catch (err) {
     console.error(err);
@@ -88,7 +88,7 @@ router.delete("/comments/:id", requireAuth, async (req, res) => {
     const commentId = Number(req.params.id);
     const comment = await prisma.comment.findUnique({ where: { id: commentId } });
     if (!comment) return res.status(404).json({ error: "COMMENT_NOT_FOUND" });
-    if (comment.userId !== req.session.user.id && req.session.user.role !== "ADMIN") return res.status(403).json({ error: "FORBIDDEN" });
+    if (comment.userId !== req.user.id && req.user.role !== "ADMIN") return res.status(403).json({ error: "FORBIDDEN" });
     await prisma.comment.delete({ where: { id: commentId } });
     res.json({ ok: true });
   } catch (err) {

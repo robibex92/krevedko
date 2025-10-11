@@ -77,20 +77,20 @@ export class BaseController {
    * Extract user from request
    */
   getUser(req) {
-    return req.session?.user;
+    return req.user;
   }
 
   /**
    * Get user ID from request
    */
   getUserId(req) {
-    return req.session?.user?.id;
+    return req.user?.id;
   }
 
   /**
    * Check if user is admin
    */
   isAdmin(req) {
-    return req.session?.user?.role === "ADMIN";
+    return req.user?.role === "ADMIN";
   }
 }

@@ -35,10 +35,12 @@ export class ReferralController extends BaseController {
       referralCode
     );
 
-    // Save to session for later use during registration
-    req.session = req.session || {};
-    req.session.referralCode = referralCode;
-    req.session.referrerId = result.referrerId;
+    // Store referral code in cookie instead of session
+    res.cookie("referralCode", referralCode, {
+      maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
+      httpOnly: true,
+      sameSite: "lax"
+    });
 
     this.success(res, {
       success: result.success,

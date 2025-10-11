@@ -54,7 +54,7 @@ router.post("/public/reviews", requireAuth, reviewUpload.array("images", 5), asy
     if (!normalizedContent) return res.status(400).json({ error: "CONTENT_REQUIRED" });
     if (![2, 3, 4, 5].includes(ratingValue)) return res.status(400).json({ error: "INVALID_RATING" });
 
-    const review = await prisma.publicReview.create({ data: { userId: req.session.user.id, title: normalizedTitle, content: normalizedContent, rating: ratingValue } });
+    const review = await prisma.publicReview.create({ data: { userId: req.user.id, title: normalizedTitle, content: normalizedContent, rating: ratingValue } });
 
     if (Array.isArray(req.files) && req.files.length) {
       await prisma.publicReviewImage.createMany({ data: req.files.map((file) => ({ reviewId: review.id, imagePath: path.join("reviews", file.filename).replace(/\\/g, "/") })) });

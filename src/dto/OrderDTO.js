@@ -66,19 +66,57 @@ export function toOrderDetailDTO(order) {
 /**
  * Order admin view - для админки
  * Use: GET /api/admin/orders
- * Size: ~6 KB per order (все поля + user info)
+ * Size: ~6 KB per order (все поля + user info + product info)
  */
 export function toOrderAdminDTO(order) {
+  const baseDTO = toOrderDetailDTO(order);
+
   return {
-    ...toOrderDetailDTO(order),
+    ...baseDTO,
     user: order.user
       ? {
           id: order.user.id,
           name: order.user.name,
+          firstName: order.user.firstName,
+          lastName: order.user.lastName,
           email: order.user.email,
           phone: order.user.phone,
+          telegramUsername: order.user.telegramUsername,
         }
       : null,
+    // Guest данные
+    isGuestOrder: order.isGuestOrder,
+    guestName: order.guestName,
+    guestPhone: order.guestPhone,
+    guestEmail: order.guestEmail,
+    guestContactMethod: order.guestContactMethod,
+    guestContactInfo: order.guestContactInfo,
+    // Добавляем полные данные продукта для каждого item
+    items: order.items
+      ? order.items.map((item) => ({
+          id: item.id,
+          productId: item.productId,
+          titleSnapshot: item.titleSnapshot,
+          unitLabelSnapshot: item.unitLabelSnapshot,
+          quantityDecimal:
+            item.quantityDecimal?.toString() || item.quantityDecimal,
+          quantity: item.quantityDecimal?.toString() || item.quantityDecimal, // Алиас для удобства
+          unitPriceKopecks: item.unitPriceKopecks,
+          subtotalKopecks: item.subtotalKopecks,
+          imagePathSnapshot: item.imagePathSnapshot,
+          // Добавляем актуальные данные продукта
+          product: item.product
+            ? {
+                id: item.product.id,
+                title: item.product.title,
+                imagePath: item.product.imagePath,
+                unitLabel: item.product.unitLabel,
+                priceKopecks: item.product.priceKopecks,
+                isActive: item.product.isActive,
+              }
+            : null,
+        }))
+      : [],
   };
 }
 

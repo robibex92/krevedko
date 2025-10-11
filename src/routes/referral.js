@@ -6,7 +6,7 @@ const router = Router();
 router.get("/referral/info", requireAuth, async (req, res) => {
   const prisma = req.app.locals.prisma;
   try {
-    const userId = req.session.user.id;
+    const userId = req.user.id;
     if (!userId) {
       return res.status(401).json({ error: "USER_NOT_AUTHENTICATED" });
     }
@@ -61,8 +61,12 @@ router.post("/referral/use", async (req, res) => {
     const referrer = await prisma.user.findUnique({ where: { referralCode } });
     if (!referrer)
       return res.status(404).json({ error: "INVALID_REFERRAL_CODE" });
-    req.session.referralCode = referralCode;
-    req.session.referrerId = referrer.id;
+    // Store referral code in cookie instead of session
+    res.cookie("referralCode", referralCode, {
+      maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
+      httpOnly: true,
+      sameSite: "lax"
+    });
     res.json({
       success: true,
       referrerName: referrer.name || referrer.email || "Пользователь",
@@ -76,7 +80,7 @@ router.post("/referral/use", async (req, res) => {
 router.get("/referral/stats", requireAuth, async (req, res) => {
   const prisma = req.app.locals.prisma;
   try {
-    const userId = req.session.user.id;
+    const userId = req.user.id;
     if (!userId) {
       return res.status(401).json({ error: "USER_NOT_AUTHENTICATED" });
     }

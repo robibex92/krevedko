@@ -314,7 +314,7 @@ async function fetchHistoryNotifications(prisma, userId) {
 
 router.get("/notifications/unread", requireAuth, async (req, res) => {
   const prisma = req.app.locals.prisma;
-  const userId = req.session?.user?.id;
+  const userId = req.user?.id;
   if (!userId) {
     return res.status(401).json({ error: "UNAUTHORIZED" });
   }
@@ -329,7 +329,7 @@ router.get("/notifications/unread", requireAuth, async (req, res) => {
 
 router.get("/notifications/history", requireAuth, async (req, res) => {
   const prisma = req.app.locals.prisma;
-  const userId = req.session?.user?.id;
+  const userId = req.user?.id;
   if (!userId) {
     return res.status(401).json({ error: "UNAUTHORIZED" });
   }
@@ -356,18 +356,16 @@ router.get("/notifications", requireAuth, async (req, res) => {
   }
 
   // Безопасное получение userId
-  const userId = req.session?.user?.id;
+  const userId = req.user?.id;
   console.log(
     "[notifications] GET /notifications - userId:",
     userId,
-    "session:",
-    !!req.session,
     "user:",
-    !!req.session?.user
+    !!req.user
   );
 
   if (!userId) {
-    console.error("[notifications] userId not found in req.session.user");
+    console.error("[notifications] userId not found in req.user");
     return res.status(401).json({ error: "UNAUTHORIZED" });
   }
 
@@ -407,7 +405,7 @@ router.get("/notifications/public", async (req, res) => {
 
 router.post("/notifications/:id/read", requireAuth, async (req, res) => {
   const prisma = req.app.locals.prisma;
-  const userId = req.session?.user?.id;
+  const userId = req.user?.id;
   if (!userId) {
     return res.status(401).json({ error: "UNAUTHORIZED" });
   }
@@ -447,7 +445,7 @@ router.post("/notifications/:id/read", requireAuth, async (req, res) => {
 
 router.post("/notifications/:id/dismiss", requireAuth, async (req, res) => {
   const prisma = req.app.locals.prisma;
-  const userId = req.session?.user?.id;
+  const userId = req.user?.id;
   if (!userId) {
     return res.status(401).json({ error: "UNAUTHORIZED" });
   }
