@@ -29,17 +29,16 @@ export class ReferralController extends BaseController {
   useReferralCode = async (req, res) => {
     const { referralCode } = req.body || {};
 
-    validateRequired({ referralCode });
+    validateRequired({ referralCode }, ["referralCode"]);
 
-    const result = await this.referralService.validateReferralCode(
-      referralCode
-    );
+    const result =
+      await this.referralService.validateReferralCode(referralCode);
 
     // Store referral code in cookie instead of session
     res.cookie("referralCode", referralCode, {
       maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
       httpOnly: true,
-      sameSite: "lax"
+      sameSite: "lax",
     });
 
     this.success(res, {

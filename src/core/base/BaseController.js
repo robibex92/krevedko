@@ -1,4 +1,5 @@
 import { asyncHandler } from "../middleware/asyncHandler.js";
+import { ValidationError } from "../errors/AppError.js";
 
 /**
  * Base controller class with common response methods
@@ -92,5 +93,19 @@ export class BaseController {
    */
   isAdmin(req) {
     return req.user?.role === "ADMIN";
+  }
+
+  /**
+   * Get ID parameter from request
+   */
+  getIdParam(req, paramName = "id") {
+    const id = parseInt(req.params[paramName], 10);
+    if (!Number.isInteger(id) || id <= 0) {
+      throw new ValidationError(
+        `Invalid ${paramName} parameter`,
+        "INVALID_ID_PARAMETER"
+      );
+    }
+    return id;
   }
 }

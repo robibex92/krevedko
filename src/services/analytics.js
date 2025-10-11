@@ -1,37 +1,49 @@
 import { dec } from "../utils/decimal.js";
 
-export async function getAnalyticsData(prisma, days = 7) {
-  const startDate = new Date();
-  startDate.setDate(startDate.getDate() - days);
+export async function getAnalyticsData(
+  prisma,
+  startDate,
+  endDate = new Date()
+) {
+  // If only one parameter provided (backward compatibility), treat as days
+  if (typeof startDate === "number") {
+    const days = startDate;
+    endDate = new Date();
+    startDate = new Date();
+    startDate.setDate(startDate.getDate() - days);
+  }
+
+  // Calculate period duration for comparison
+  const periodDuration = endDate.getTime() - startDate.getTime();
+  const prevStartDate = new Date(startDate.getTime() - periodDuration);
+  const prevEndDate = new Date(startDate.getTime());
 
   const totalOrders = await prisma.order.count({
-    where: { createdAt: { gte: startDate } },
+    where: { createdAt: { gte: startDate, lte: endDate } },
   });
 
-  const prevStartDate = new Date();
-  prevStartDate.setDate(prevStartDate.getDate() - days * 2);
   const prevTotalOrders = await prisma.order.count({
-    where: { createdAt: { gte: prevStartDate, lt: startDate } },
+    where: { createdAt: { gte: prevStartDate, lt: prevEndDate } },
   });
 
   const revenueResult = await prisma.order.aggregate({
-    where: { createdAt: { gte: startDate } },
+    where: { createdAt: { gte: startDate, lte: endDate } },
     _sum: { totalKopecks: true },
   });
   const totalRevenue = revenueResult._sum.totalKopecks || 0;
 
   const prevRevenueResult = await prisma.order.aggregate({
-    where: { createdAt: { gte: prevStartDate, lt: startDate } },
+    where: { createdAt: { gte: prevStartDate, lt: prevEndDate } },
     _sum: { totalKopecks: true },
   });
   const prevTotalRevenue = prevRevenueResult._sum.totalKopecks || 0;
 
   const totalCustomers = await prisma.user.count({
-    where: { createdAt: { gte: startDate }, role: "CUSTOMER" },
+    where: { createdAt: { gte: startDate, lte: endDate }, role: "CUSTOMER" },
   });
   const prevTotalCustomers = await prisma.user.count({
     where: {
-      createdAt: { gte: prevStartDate, lt: startDate },
+      createdAt: { gte: prevStartDate, lt: prevEndDate },
       role: "CUSTOMER",
     },
   });
@@ -43,7 +55,7 @@ export async function getAnalyticsData(prisma, days = 7) {
 
   const ordersByStatus = await prisma.order.groupBy({
     by: ["status"],
-    where: { createdAt: { gte: startDate } },
+    where: { createdAt: { gte: startDate, lte: endDate } },
     _count: { status: true },
   });
   const statusMap = {};
@@ -59,7 +71,7 @@ export async function getAnalyticsData(prisma, days = 7) {
              SUM(oi."subtotalKopecks") AS "revenue"
       FROM "OrderItem" oi
       JOIN "Order" o ON o.id = oi."orderId"
-      WHERE o."createdAt" >= ${startDate}
+      WHERE o."createdAt" >= ${startDate} AND o."createdAt" <= ${endDate}
       GROUP BY oi."productId"
       ORDER BY "orderCount" DESC
       LIMIT 10
@@ -88,7 +100,7 @@ export async function getAnalyticsData(prisma, days = 7) {
       SELECT DATE("createdAt") AS "date",
              COUNT(*)          AS "orders"
       FROM "Order"
-      WHERE "createdAt" >= ${startDate}
+      WHERE "createdAt" >= ${startDate} AND "createdAt" <= ${endDate}
       GROUP BY DATE("createdAt")
       ORDER BY "date" ASC
     `;
@@ -99,7 +111,7 @@ export async function getAnalyticsData(prisma, days = 7) {
 
   const categoryStats = await prisma.orderItem.groupBy({
     by: ["productId"],
-    where: { order: { createdAt: { gte: startDate } } },
+    where: { order: { createdAt: { gte: startDate, lte: endDate } } },
     _count: { productId: true },
     _sum: { subtotalKopecks: true },
   });
@@ -142,6 +154,10 @@ export async function getAnalyticsData(prisma, days = 7) {
   });
 
   return {
+    period: {
+      startDate: startDate.toISOString(),
+      endDate: endDate.toISOString(),
+    },
     totalOrders,
     totalRevenue,
     totalCustomers,

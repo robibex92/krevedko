@@ -625,8 +625,8 @@ router.patch(
             ? JSON.stringify(tags)
             : null
           : tags
-          ? JSON.stringify(tags)
-          : null;
+            ? JSON.stringify(tags)
+            : null;
       if (searchKeywords !== undefined)
         data.searchKeywords = searchKeywords || null;
       const p = await prisma.product.update({ where: { id }, data });
@@ -1199,13 +1199,29 @@ router.post("/admin/broadcast", requireAuth, requireAdmin, async (req, res) => {
   }
 });
 
-// Admin analytics
+// Admin analytics (legacy route - v2 route recommended)
 router.get("/admin/analytics", requireAuth, requireAdmin, async (req, res) => {
   const prisma = req.app.locals.prisma;
   try {
-    const { days = 7 } = req.query;
-    console.log(`[analytics] Fetching analytics for ${days} days`);
-    const analytics = await getAnalyticsData(prisma, Number(days));
+    const { days, startDate, endDate } = req.query;
+
+    let start, end;
+
+    if (startDate && endDate) {
+      start = new Date(startDate);
+      end = new Date(endDate);
+      console.log(
+        `[analytics] Fetching analytics from ${startDate} to ${endDate}`
+      );
+    } else {
+      const normalizedDays = Number(days) || 7;
+      console.log(`[analytics] Fetching analytics for ${normalizedDays} days`);
+      end = new Date();
+      start = new Date();
+      start.setDate(start.getDate() - normalizedDays);
+    }
+
+    const analytics = await getAnalyticsData(prisma, start, end);
     console.log(`[analytics] Successfully fetched analytics data`);
     res.json(analytics);
   } catch (err) {

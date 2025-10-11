@@ -46,7 +46,7 @@ export class FavoriteController extends BaseController {
     const { product_id } = req.body || {};
 
     const productId = Number(product_id);
-    validateRequired({ product_id: productId });
+    validateRequired({ product_id: productId }, ["product_id"]);
 
     const favorite = await this.favoriteService.addToFavorites(
       userId,
