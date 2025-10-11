@@ -1,5 +1,5 @@
 import { BaseController } from "../core/base/BaseController.js";
-import { ValidationError } from "../core/utils/errors.js";
+import { ValidationError } from "../core/errors/AppError.js";
 
 export class CartController extends BaseController {
   constructor(cartService, collectionService) {
