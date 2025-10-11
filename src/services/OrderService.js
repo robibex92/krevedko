@@ -61,12 +61,9 @@ export class OrderService {
     );
     const finalTotal = total.add(dec(deliveryCost));
 
-    // Generate order number
-    const orderNumber = this._generateOrderNumber();
-
     // Create order in transaction
     const order = await this.orderRepo.prisma.$transaction(async (tx) => {
-      // Create order
+      // Create order without orderNumber first
       const createdOrder = await tx.order.create({
         data: {
           userId,
@@ -77,9 +74,16 @@ export class OrderService {
           deliveryAddress: deliveryData.deliveryAddress || null,
           deliveryCost,
           paymentMethod: deliveryData.paymentMethod || "development",
-          orderNumber,
         },
       });
+
+      // Generate and update order number based on order ID
+      const orderNumber = this._generateOrderNumber(createdOrder.id);
+      await tx.order.update({
+        where: { id: createdOrder.id },
+        data: { orderNumber },
+      });
+      createdOrder.orderNumber = orderNumber;
 
       // Create order items and update stock
       for (const item of items) {
@@ -173,9 +177,8 @@ export class OrderService {
     }
 
     // Validate target collection
-    const collection = await this.collectionRepo.findByIdOrFail(
-      targetCollectionId
-    );
+    const collection =
+      await this.collectionRepo.findByIdOrFail(targetCollectionId);
     if (collection.status !== "ACTIVE") {
       throw new BusinessLogicError(
         "Collection is not active",
@@ -317,11 +320,11 @@ export class OrderService {
 
   /**
    * Private: Generate order number
+   * Simple sequential format: ORD-00001, ORD-00002, etc.
+   * Order ID is used as the sequence number
    */
-  _generateOrderNumber() {
-    const timestamp = Date.now().toString(36).toUpperCase();
-    const random = Math.random().toString(36).substring(2, 6).toUpperCase();
-    return `ORD-${timestamp}-${random}`;
+  _generateOrderNumber(orderId) {
+    return `ORD-${String(orderId).padStart(5, "0")}`;
   }
 
   /**
@@ -421,12 +424,9 @@ export class OrderService {
     );
     const finalTotal = total.add(dec(deliveryCost));
 
-    // Generate order number
-    const orderNumber = this._generateOrderNumber();
-
     // Create order in transaction
     const order = await this.orderRepo.prisma.$transaction(async (tx) => {
-      // Create order
+      // Create order without orderNumber first
       const createdOrder = await tx.order.create({
         data: {
           userId: null, // Guest order
@@ -438,7 +438,6 @@ export class OrderService {
           deliveryAddress: deliveryData.deliveryAddress || null,
           deliveryCost,
           paymentMethod: deliveryData.paymentMethod || "development",
-          orderNumber,
           // Guest data
           isGuestOrder: true,
           guestName: guestData.name || null,
@@ -448,6 +447,14 @@ export class OrderService {
           guestContactInfo: guestData.contactInfo || null,
         },
       });
+
+      // Generate and update order number based on order ID
+      const orderNumber = this._generateOrderNumber(createdOrder.id);
+      await tx.order.update({
+        where: { id: createdOrder.id },
+        data: { orderNumber },
+      });
+      createdOrder.orderNumber = orderNumber;
 
       // Create order items and update stock
       for (const item of items) {
