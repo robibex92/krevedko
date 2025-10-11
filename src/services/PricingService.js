@@ -10,9 +10,17 @@ export class PricingService {
    * Get product pricing for collection
    */
   async getProductPricing(productId, collectionId) {
+    console.log('[PricingService] getProductPricing called:', {
+      productId,
+      productIdType: typeof productId,
+      collectionId,
+      collectionIdType: typeof collectionId,
+    });
+
     const product = await this.productRepo.findById(productId);
 
     if (!product) {
+      console.warn('[PricingService] Product not found:', { productId });
       return {
         isAvailable: false,
         price: 0,

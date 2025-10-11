@@ -18,15 +18,14 @@ export function csrfIssue(req, res) {
 export function csrfProtect(req, res, next) {
   const method = req.method.toUpperCase();
   if (["GET", "HEAD", "OPTIONS"].includes(method)) return next();
-  
+
   // JWT в Authorization header - безопасен от CSRF, пропускаем проверку
   const authz = req.headers["authorization"] || req.headers["Authorization"];
   if (authz && authz.toString().startsWith("Bearer ")) {
     return next();
   }
-  
+
   // Для всех остальных запросов тоже пропускаем (так как сессий больше нет)
   // В будущем можно удалить csrfProtect полностью
   next();
 }
-

@@ -25,7 +25,12 @@ export class BaseRepository {
       });
       return record;
     } catch (error) {
-      throw new DatabaseError(`Failed to find ${this.modelName} by id`, error);
+      console.error(`[BaseRepository] Failed to find ${this.modelName} by id:`, {
+        id,
+        idType: typeof id,
+        error: error.message,
+      });
+      throw new DatabaseError(`Failed to find ${this.modelName} by id: ${id} (type: ${typeof id})`, error);
     }
   }
 

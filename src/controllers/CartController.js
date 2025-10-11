@@ -1,4 +1,5 @@
 import { BaseController } from "../core/base/BaseController.js";
+import { ValidationError } from "../core/utils/errors.js";
 
 export class CartController extends BaseController {
   constructor(cartService, collectionService) {
@@ -37,6 +38,19 @@ export class CartController extends BaseController {
     const userId = this.getUserId(req);
     const { product_id, quantity, collection_id } = req.body || {};
 
+    // Validate required fields
+    if (!product_id) {
+      throw new ValidationError("product_id is required");
+    }
+    if (!quantity) {
+      throw new ValidationError("quantity is required");
+    }
+
+    const productId = Number(product_id);
+    if (isNaN(productId) || productId <= 0) {
+      throw new ValidationError("product_id must be a valid positive number");
+    }
+
     // Resolve collection
     const collection = await this.collectionService.resolveCollectionSelection(
       collection_id ? Number(collection_id) : undefined
@@ -44,7 +58,7 @@ export class CartController extends BaseController {
 
     const item = await this.cartService.addItem(
       userId,
-      Number(product_id),
+      productId,
       quantity,
       collection.id
     );
