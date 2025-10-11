@@ -4,6 +4,14 @@ import { Strategy as MailRuStrategy } from "passport-mailru";
  * Настройка Mail.ru OAuth стратегии для Passport.js
  */
 export function configureMailRuStrategy(passport, oauthService) {
+  // Пропускаем если нет credentials
+  if (!process.env.MAILRU_CLIENT_ID || !process.env.MAILRU_CLIENT_SECRET) {
+    console.warn(
+      "⚠️  Mail.ru OAuth не настроен (пропущены MAILRU_CLIENT_ID/SECRET)"
+    );
+    return;
+  }
+
   passport.use(
     "mailru",
     new MailRuStrategy(

@@ -4,6 +4,14 @@ import { Strategy as YandexStrategy } from "passport-yandex";
  * Настройка Yandex OAuth стратегии для Passport.js
  */
 export function configureYandexStrategy(passport, oauthService) {
+  // Пропускаем если нет credentials
+  if (!process.env.YANDEX_CLIENT_ID || !process.env.YANDEX_CLIENT_SECRET) {
+    console.warn(
+      "⚠️  Yandex OAuth не настроен (пропущены YANDEX_CLIENT_ID/SECRET)"
+    );
+    return;
+  }
+
   passport.use(
     "yandex",
     new YandexStrategy(

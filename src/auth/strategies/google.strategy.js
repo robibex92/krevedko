@@ -4,6 +4,14 @@ import { Strategy as GoogleStrategy } from "passport-google-oauth20";
  * Настройка Google OAuth стратегии для Passport.js
  */
 export function configureGoogleStrategy(passport, oauthService) {
+  // Пропускаем если нет credentials
+  if (!process.env.GOOGLE_CLIENT_ID || !process.env.GOOGLE_CLIENT_SECRET) {
+    console.warn(
+      "⚠️  Google OAuth не настроен (пропущены GOOGLE_CLIENT_ID/SECRET)"
+    );
+    return;
+  }
+
   passport.use(
     "google",
     new GoogleStrategy(
