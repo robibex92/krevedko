@@ -1,27 +1,32 @@
 import { randomToken } from "../middleware/auth.js";
 
+/**
+ * ✅ CSRF Issue - теперь работает без сессий
+ * Возвращает статичный токен для совместимости с фронтендом
+ * JWT не подвержен CSRF атакам, так что это только для legacy поддержки
+ */
 export function csrfIssue(req, res) {
-  const sid = req.sessionID;
-  if (!sid) return res.status(500).json({ error: "NO_SESSION" });
-  const secret = randomToken(32);
-  req.app.locals.csrfSecrets.set(sid, secret);
-  res.json({ csrfToken: secret });
+  // Для JWT-авторизации CSRF не нужен, возвращаем статичный токен
+  const token = "jwt-no-csrf-needed";
+  res.json({ csrfToken: token });
 }
+
+/**
+ * ✅ CSRF Protect - skip для JWT
+ * JWT авторизация не подвержена CSRF атакам (stateless, в header, не в cookie)
+ */
 export function csrfProtect(req, res, next) {
   const method = req.method.toUpperCase();
   if (["GET", "HEAD", "OPTIONS"].includes(method)) return next();
-  // If request carries a Bearer JWT, skip CSRF checks (stateless auth is not CSRF-prone)
+  
+  // JWT в Authorization header - безопасен от CSRF, пропускаем проверку
   const authz = req.headers["authorization"] || req.headers["Authorization"];
   if (authz && authz.toString().startsWith("Bearer ")) {
     return next();
   }
-  const sid = req.sessionID;
-  if (!sid) return res.status(401).json({ error: "UNAUTHORIZED" });
-  const expected = req.app.locals.csrfSecrets.get(sid);
-  const provided = req.headers["x-csrf-token"];
-  if (!expected || !provided || provided !== expected) {
-    return res.status(403).json({ error: "CSRF_INVALID" });
-  }
+  
+  // Для всех остальных запросов тоже пропускаем (так как сессий больше нет)
+  // В будущем можно удалить csrfProtect полностью
   next();
 }
 

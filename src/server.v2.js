@@ -51,7 +51,7 @@ const prisma = new PrismaClient();
 const container = configureContainer(prisma);
 
 // App locals (legacy support - will be removed gradually)
-// app.locals.prisma = prisma; // REMOVED: Use DI container instead
+app.locals.prisma = prisma; // ✅ Required for legacy routes (auth, cart, favorites, etc.)
 app.locals.container = container;
 app.locals.csrfSecrets = new Map();
 app.locals.api = { baseUrl: API_URL, fetchJson: null };
