@@ -13,6 +13,12 @@ export function createAdminBroadcastRoutes(container) {
   // All routes require auth and admin role
   router.use(requireAuth, requireAdmin);
 
+  // Broadcast preview (must be before /broadcast route)
+  router.post(
+    "/broadcast/preview",
+    asyncHandler(broadcastController.previewBroadcast)
+  );
+
   // Broadcast
   router.post("/broadcast", asyncHandler(broadcastController.broadcastMessage));
 

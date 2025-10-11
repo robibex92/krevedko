@@ -14,6 +14,56 @@ export class BroadcastService {
   }
 
   /**
+   * Preview broadcast recipients without sending
+   */
+  async previewRecipients(data) {
+    const { filters = {} } = data;
+
+    // Parse filters
+    const { roles, statuses, collectionIds } = this._parseFilters(filters);
+    const excludedIds = this._parseExcludedIds(data.excludedUserIds || []);
+
+    // Build user query (only for Telegram recipients)
+    const userWhere = {
+      telegramId: { not: null }, // Only users with Telegram
+    };
+
+    if (roles.length) {
+      userWhere.role = { in: roles };
+    }
+
+    if (excludedIds.length) {
+      userWhere.id = { notIn: excludedIds };
+    }
+
+    if (statuses.length || collectionIds.length) {
+      userWhere.orders = {
+        some: {
+          ...(statuses.length ? { status: { in: statuses } } : {}),
+          ...(collectionIds.length
+            ? { collectionId: { in: collectionIds } }
+            : {}),
+        },
+      };
+    }
+
+    // Fetch recipients
+    const recipients = await this.prisma.user.findMany({
+      where: userWhere,
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        role: true,
+        telegramId: true,
+        telegramUsername: true,
+      },
+    });
+
+    return recipients;
+  }
+
+  /**
    * Broadcast message to users via Telegram and/or Email
    */
   async broadcastMessage(data) {

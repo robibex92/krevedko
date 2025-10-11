@@ -18,4 +18,16 @@ export class BroadcastController extends BaseController {
 
     this.success(res, result);
   };
+
+  /**
+   * POST /api/admin/broadcast/preview
+   * Preview broadcast recipients without sending
+   */
+  previewBroadcast = async (req, res) => {
+    const recipients = await this.broadcastService.previewRecipients(
+      req.body || {}
+    );
+
+    this.success(res, { recipients });
+  };
 }
