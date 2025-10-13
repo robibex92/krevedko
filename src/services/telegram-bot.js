@@ -276,6 +276,12 @@ export async function updateProductMessage(prisma, product, categoryId) {
       return null;
     }
 
+    // Если товар неактивен, не обновляем - он должен быть помечен как удаленный через product_remove
+    if (!product.isActive) {
+      console.log(`Product ${product.id} is inactive, skipping update`);
+      return null;
+    }
+
     const newMessageText = buildProductMessage(product);
     const chatId = messageRecord.category.telegramChatId;
     const messageId = messageRecord.messageId;
@@ -393,10 +399,6 @@ export async function markProductAsRemoved(prisma, productId) {
       include: { category: true },
     });
 
-    console.log(
-      `[markProductAsRemoved] Found ${messages.length} messages for product ${productId}`
-    );
-
     for (const messageRecord of messages) {
       const removedText = buildProductRemovedMessage(messageRecord.messageText);
       const chatId = messageRecord.category.telegramChatId;
@@ -446,8 +448,8 @@ export async function markProductAsRemoved(prisma, productId) {
       }
     }
 
-    // Удаляем из чата товаров в наличии
-    await removeProductFromInStock(prisma, productId);
+    // Также удаляем из чата быстрых продаж если был там
+    await removeProductFromQuickPickup(prisma, productId);
   } catch (error) {
     console.error(`Failed to mark product ${productId} as removed:`, error);
     throw error;
@@ -826,9 +828,6 @@ export async function processMessageQueue(prisma) {
             break;
 
           case "product_remove":
-            console.log(
-              `[queue] Processing product_remove for productId: ${payload.productId}`
-            );
             await markProductAsRemoved(prisma, payload.productId);
             break;
 
