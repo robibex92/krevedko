@@ -45,25 +45,27 @@ function resolveProductImageSource(imagePath) {
  */
 export function buildProductMessage(product) {
   const lines = [];
-  
+
   lines.push(`<b>${product.title}</b>`);
-  
+
   if (product.description) {
     lines.push("");
     lines.push(product.description);
   }
-  
+
   lines.push("");
-  lines.push(`💰 Цена: <b>${formatPrice(product.priceKopecks)}</b> за ${product.unitLabel}`);
-  
+  lines.push(
+    `💰 Цена: <b>${formatPrice(product.priceKopecks)}</b> за ${product.unitLabel}`
+  );
+
   if (product.stockQuantity && parseFloat(product.stockQuantity) > 0) {
     lines.push(`📦 В наличии: ${product.stockQuantity} ${product.unitLabel}`);
   }
-  
+
   if (product.canPickupNow) {
     lines.push(`✅ Можно забрать сегодня`);
   }
-  
+
   return lines.join("\n");
 }
 
@@ -71,7 +73,7 @@ export function buildProductMessage(product) {
  * Создание текста сообщения для снятого с продажи товара
  */
 export function buildProductRemovedMessage(originalText) {
-  const lines = originalText.split("\n").map(line => `<s>${line}</s>`);
+  const lines = originalText.split("\n").map((line) => `<s>${line}</s>`);
   lines.push("");
   lines.push("<b>⛔️ СНЯТО С ПРОДАЖИ</b>");
   return lines.join("\n");
@@ -82,17 +84,17 @@ export function buildProductRemovedMessage(originalText) {
  */
 export function buildQuickPickupMessage(product) {
   const lines = [];
-  
+
   lines.push(`<b>⚡ МОЖНО ЗАБРАТЬ СЕЙЧАС!</b>`);
   lines.push("");
   lines.push(`<b>${product.title}</b>`);
   lines.push(`💰 ${formatPrice(product.priceKopecks)} за ${product.unitLabel}`);
-  
+
   if (product.description) {
     lines.push("");
     lines.push(product.description);
   }
-  
+
   return lines.join("\n");
 }
 
@@ -101,22 +103,22 @@ export function buildQuickPickupMessage(product) {
  */
 export function buildReviewMessage(review, user) {
   const lines = [];
-  
+
   const stars = "⭐".repeat(review.rating);
   lines.push(`<b>Новый отзыв</b> ${stars}`);
   lines.push("");
-  
+
   const userName = user.firstName || user.name || "Клиент";
   lines.push(`От: ${userName}`);
   lines.push("");
-  
+
   if (review.title) {
     lines.push(`<b>${review.title}</b>`);
     lines.push("");
   }
-  
+
   lines.push(review.content);
-  
+
   return lines.join("\n");
 }
 
@@ -125,21 +127,21 @@ export function buildReviewMessage(review, user) {
  */
 export function buildRecipeMessage(recipe) {
   const lines = [];
-  
+
   lines.push(`<b>🍳 Новый рецепт!</b>`);
   lines.push("");
   lines.push(`<b>${recipe.title}</b>`);
-  
+
   if (recipe.excerpt) {
     lines.push("");
     lines.push(recipe.excerpt);
   }
-  
+
   // Предполагаем, что URL будет в формате https://your-domain.com/recipes/slug
-  const recipeUrl = `${process.env.FRONTEND_URL || ''}/recipes/${recipe.slug}`;
+  const recipeUrl = `${process.env.FRONTEND_URL || ""}/recipes/${recipe.slug}`;
   lines.push("");
   lines.push(`<a href="${recipeUrl}">Читать рецепт →</a>`);
-  
+
   return lines.join("\n");
 }
 
@@ -151,28 +153,30 @@ export async function sendProductToCategory(prisma, product, category) {
     const messageText = buildProductMessage(product);
     const chatId = category.telegramChatId;
     const threadId = category.telegramThreadId || null;
-    
+
     let result;
     let hasMedia = false;
     let mediaType = null;
-    
+
     // Если есть изображение, отправляем с фото
     if (product.imagePath) {
-      const { url: photoUrl, filePath } = resolveProductImageSource(product.imagePath);
+      const { url: photoUrl, filePath } = resolveProductImageSource(
+        product.imagePath
+      );
       const photoSource = photoUrl || filePath;
 
       if (photoSource) {
         try {
-          result = await sendTelegramPhoto(
-            chatId,
-            photoSource,
-            messageText,
-            { threadId }
-          );
+          result = await sendTelegramPhoto(chatId, photoSource, messageText, {
+            threadId,
+          });
           hasMedia = true;
           mediaType = "photo";
         } catch (error) {
-          console.error(`Failed to send photo for product ${product.id}:`, error);
+          console.error(
+            `Failed to send photo for product ${product.id}:`,
+            error
+          );
           // Если не удалось отправить фото, отправляем текст
           result = await sendTelegramMessage(chatId, messageText, { threadId });
         }
@@ -182,7 +186,7 @@ export async function sendProductToCategory(prisma, product, category) {
     } else {
       result = await sendTelegramMessage(chatId, messageText, { threadId });
     }
-    
+
     // Сохраняем информацию о сообщении
     const messageRecord = await prisma.productTelegramMessage.create({
       data: {
@@ -195,10 +199,13 @@ export async function sendProductToCategory(prisma, product, category) {
         canEdit: true,
       },
     });
-    
+
     return messageRecord;
   } catch (error) {
-    console.error(`Failed to send product ${product.id} to category ${category.id}:`, error);
+    console.error(
+      `Failed to send product ${product.id} to category ${category.id}:`,
+      error
+    );
     throw error;
   }
 }
@@ -219,43 +226,53 @@ export async function updateProductMessage(prisma, product, categoryId) {
         category: true,
       },
     });
-    
+
     if (!messageRecord) {
-      console.warn(`No message record found for product ${product.id} in category ${categoryId}`);
+      console.warn(
+        `No message record found for product ${product.id} in category ${categoryId}`
+      );
       return null;
     }
-    
+
     const newMessageText = buildProductMessage(product);
     const chatId = messageRecord.category.telegramChatId;
     const messageId = messageRecord.messageId;
-    
+
     // Проверяем, можно ли редактировать сообщение (не прошло 48 часов)
     const messageAge = Date.now() - messageRecord.sentAt.getTime();
     const canEdit = messageAge < MESSAGE_EDIT_WINDOW && messageRecord.canEdit;
-    
+
     if (!canEdit) {
       // Удаляем старое и создаем новое
       await deleteTelegramMessage(chatId, messageId);
       await prisma.productTelegramMessage.delete({
         where: { id: messageRecord.id },
       });
-      return await sendProductToCategory(prisma, product, messageRecord.category);
+      return await sendProductToCategory(
+        prisma,
+        product,
+        messageRecord.category
+      );
     }
-    
+
     try {
       // Проверяем изменение медиа
       const hasNewImage = !!product.imagePath;
       const hadImage = messageRecord.hasMedia;
 
-      const { url: newPhotoUrl, filePath: newPhotoPath } = resolveProductImageSource(
-        product.imagePath
-      );
+      const { url: newPhotoUrl, filePath: newPhotoPath } =
+        resolveProductImageSource(product.imagePath);
       const newPhotoSource = newPhotoUrl || newPhotoPath;
 
       if (hasNewImage && hadImage) {
         if (newPhotoSource) {
           // Обновляем фото и текст
-          await editTelegramMessageMedia(chatId, messageId, newPhotoSource, newMessageText);
+          await editTelegramMessageMedia(
+            chatId,
+            messageId,
+            newPhotoSource,
+            newMessageText
+          );
         } else {
           // Нет доступного медиа — обновляем только текст
           await editTelegramMessage(chatId, messageId, newMessageText);
@@ -266,12 +283,16 @@ export async function updateProductMessage(prisma, product, categoryId) {
         await prisma.productTelegramMessage.delete({
           where: { id: messageRecord.id },
         });
-        return await sendProductToCategory(prisma, product, messageRecord.category);
+        return await sendProductToCategory(
+          prisma,
+          product,
+          messageRecord.category
+        );
       } else {
         // Обновляем только текст
         await editTelegramMessage(chatId, messageId, newMessageText);
       }
-      
+
       // Обновляем запись в БД
       const updated = await prisma.productTelegramMessage.update({
         where: { id: messageRecord.id },
@@ -282,7 +303,7 @@ export async function updateProductMessage(prisma, product, categoryId) {
           mediaType: newPhotoSource ? "photo" : null,
         },
       });
-      
+
       return updated;
     } catch (error) {
       if (error.message === "MESSAGE_TOO_OLD") {
@@ -291,12 +312,19 @@ export async function updateProductMessage(prisma, product, categoryId) {
         await prisma.productTelegramMessage.delete({
           where: { id: messageRecord.id },
         });
-        return await sendProductToCategory(prisma, product, messageRecord.category);
+        return await sendProductToCategory(
+          prisma,
+          product,
+          messageRecord.category
+        );
       }
       throw error;
     }
   } catch (error) {
-    console.error(`Failed to update product message ${product.id} in category ${categoryId}:`, error);
+    console.error(
+      `Failed to update product message ${product.id} in category ${categoryId}:`,
+      error
+    );
     throw error;
   }
 }
@@ -310,15 +338,15 @@ export async function markProductAsRemoved(prisma, productId) {
       where: { productId },
       include: { category: true },
     });
-    
+
     for (const messageRecord of messages) {
       const removedText = buildProductRemovedMessage(messageRecord.messageText);
       const chatId = messageRecord.category.telegramChatId;
       const messageId = messageRecord.messageId;
-      
+
       const messageAge = Date.now() - messageRecord.sentAt.getTime();
       const canEdit = messageAge < MESSAGE_EDIT_WINDOW && messageRecord.canEdit;
-      
+
       if (canEdit) {
         try {
           await editTelegramMessage(chatId, messageId, removedText);
@@ -334,8 +362,8 @@ export async function markProductAsRemoved(prisma, productId) {
           if (error.message === "MESSAGE_TOO_OLD") {
             // Удаляем старое и создаем новое с зачеркнутым текстом
             await deleteTelegramMessage(chatId, messageId);
-            await sendTelegramMessage(chatId, removedText, { 
-              threadId: messageRecord.category.telegramThreadId 
+            await sendTelegramMessage(chatId, removedText, {
+              threadId: messageRecord.category.telegramThreadId,
             });
             await prisma.productTelegramMessage.update({
               where: { id: messageRecord.id },
@@ -351,7 +379,7 @@ export async function markProductAsRemoved(prisma, productId) {
         }
       }
     }
-    
+
     // Удаляем из чата товаров в наличии
     await removeProductFromInStock(prisma, productId);
   } catch (error) {
@@ -369,26 +397,26 @@ export async function addProductToQuickPickup(prisma, product) {
     const settings = await prisma.telegramSettings.findUnique({
       where: { key: "quick_pickup_chat" },
     });
-    
+
     if (!settings || !settings.chatId) {
       console.warn("Quick pickup chat not configured");
       return null;
     }
-    
+
     // Проверяем, есть ли уже сообщение
     const existing = await prisma.inStockTelegramMessage.findUnique({
       where: { productId: product.id },
     });
-    
+
     if (existing) {
       console.log(`Product ${product.id} already in quick pickup chat`);
       return existing;
     }
-    
+
     const messageText = buildQuickPickupMessage(product);
     let result;
     let hasMedia = false;
-    
+
     if (product.imagePath) {
       const imagePath = path.join(process.cwd(), "uploads", product.imagePath);
       try {
@@ -400,17 +428,20 @@ export async function addProductToQuickPickup(prisma, product) {
         );
         hasMedia = true;
       } catch (error) {
-        console.error(`Failed to send photo for quick pickup product ${product.id}:`, error);
-        result = await sendTelegramMessage(settings.chatId, messageText, { 
-          threadId: settings.threadId 
+        console.error(
+          `Failed to send photo for quick pickup product ${product.id}:`,
+          error
+        );
+        result = await sendTelegramMessage(settings.chatId, messageText, {
+          threadId: settings.threadId,
         });
       }
     } else {
-      result = await sendTelegramMessage(settings.chatId, messageText, { 
-        threadId: settings.threadId 
+      result = await sendTelegramMessage(settings.chatId, messageText, {
+        threadId: settings.threadId,
       });
     }
-    
+
     const messageRecord = await prisma.inStockTelegramMessage.create({
       data: {
         productId: product.id,
@@ -419,10 +450,13 @@ export async function addProductToQuickPickup(prisma, product) {
         hasMedia,
       },
     });
-    
+
     return messageRecord;
   } catch (error) {
-    console.error(`Failed to add product ${product.id} to quick pickup chat:`, error);
+    console.error(
+      `Failed to add product ${product.id} to quick pickup chat:`,
+      error
+    );
     throw error;
   }
 }
@@ -435,24 +469,27 @@ export async function removeProductFromQuickPickup(prisma, productId) {
     const messageRecord = await prisma.inStockTelegramMessage.findUnique({
       where: { productId },
     });
-    
+
     if (!messageRecord) {
       return;
     }
-    
+
     const settings = await prisma.telegramSettings.findUnique({
       where: { key: "quick_pickup_chat" },
     });
-    
+
     if (settings && settings.chatId) {
       await deleteTelegramMessage(settings.chatId, messageRecord.messageId);
     }
-    
+
     await prisma.inStockTelegramMessage.delete({
       where: { productId },
     });
   } catch (error) {
-    console.error(`Failed to remove product ${productId} from quick pickup chat:`, error);
+    console.error(
+      `Failed to remove product ${productId} from quick pickup chat:`,
+      error
+    );
     // Не бросаем ошибку, так как это не критично
   }
 }
@@ -465,19 +502,19 @@ export async function sendReviewToChat(prisma, review, user) {
     const settings = await prisma.telegramSettings.findUnique({
       where: { key: "reviews_chat" },
     });
-    
+
     if (!settings || !settings.chatId) {
       console.warn("Reviews chat not configured");
       return;
     }
-    
+
     const messageText = buildReviewMessage(review, user);
-    
+
     // Загружаем изображения отзыва
     const images = await prisma.publicReviewImage.findMany({
       where: { reviewId: review.id },
     });
-    
+
     if (images.length === 0) {
       // Только текст
       await sendTelegramMessage(settings.chatId, messageText, {
@@ -485,7 +522,11 @@ export async function sendReviewToChat(prisma, review, user) {
       });
     } else if (images.length === 1) {
       // Одно изображение
-      const imagePath = path.join(process.cwd(), "uploads", images[0].imagePath);
+      const imagePath = path.join(
+        process.cwd(),
+        "uploads",
+        images[0].imagePath
+      );
       await sendTelegramPhoto(settings.chatId, imagePath, messageText, {
         threadId: settings.threadId,
       });
@@ -516,20 +557,91 @@ export async function sendRecipeToChat(prisma, recipe) {
     const settings = await prisma.telegramSettings.findUnique({
       where: { key: "recipes_chat" },
     });
-    
+
     if (!settings || !settings.chatId) {
       console.warn("Recipes chat not configured");
       return;
     }
-    
+
     const messageText = buildRecipeMessage(recipe);
-    
+
     await sendTelegramMessage(settings.chatId, messageText, {
       threadId: settings.threadId,
     });
   } catch (error) {
     console.error(`Failed to send recipe ${recipe.id} to chat:`, error);
     // Не бросаем ошибку, так как рецепт уже создан
+  }
+}
+
+/**
+ * Отправка уведомления о новом заказе админу
+ */
+export async function sendOrderNotificationToAdmin(prisma, order, user) {
+  try {
+    const adminChatId = process.env.ADMIN_TELEGRAM_ID;
+
+    if (!adminChatId) {
+      console.warn("ADMIN_TELEGRAM_ID not configured");
+      return;
+    }
+
+    const lines = [];
+    lines.push("<b>🛒 Новый заказ на сайте!</b>");
+    lines.push("");
+    lines.push(`📋 Номер заказа: <b>${order.orderNumber}</b>`);
+
+    if (user) {
+      const fullName =
+        [user.firstName, user.lastName].filter(Boolean).join(" ") ||
+        user.name ||
+        "Клиент";
+      lines.push(`👤 От: ${fullName}`);
+
+      if (user.telegramUsername) {
+        lines.push(`📱 Telegram: @${user.telegramUsername}`);
+      } else if (user.email) {
+        lines.push(`📧 Email: ${user.email}`);
+      } else if (user.phone) {
+        lines.push(`📞 Телефон: ${user.phone}`);
+      }
+    } else if (order.isGuestOrder) {
+      lines.push(`👤 Гостевой заказ`);
+      if (order.guestName) {
+        lines.push(`   Имя: ${order.guestName}`);
+      }
+      if (order.guestPhone) {
+        lines.push(`   📞 ${order.guestPhone}`);
+      }
+      if (order.guestEmail) {
+        lines.push(`   📧 ${order.guestEmail}`);
+      }
+      if (order.guestContactInfo) {
+        lines.push(`   💬 ${order.guestContactInfo}`);
+      }
+    }
+
+    lines.push("");
+    lines.push(`💰 Сумма: <b>${formatPrice(order.totalKopecks)}</b>`);
+
+    if (order.deliveryType === "DELIVERY") {
+      lines.push(`🚚 Доставка`);
+      if (order.deliveryAddress) {
+        lines.push(`   ${order.deliveryAddress}`);
+      }
+    } else {
+      lines.push(`🏪 Самовывоз`);
+    }
+
+    const messageText = lines.join("\n");
+
+    await sendTelegramMessage(adminChatId, messageText, {});
+  } catch (error) {
+    console.error(
+      `Failed to send order ${order.id} notification to admin:`,
+      error
+    );
+    // Не бросаем ошибку, так как заказ уже создан
   }
 }
 
@@ -548,16 +660,16 @@ export async function processMessageQueue(prisma) {
       orderBy: { scheduledFor: "asc" },
       take: 10, // Обрабатываем по 10 сообщений за раз
     });
-    
+
     for (const message of messages) {
       await prisma.telegramMessageQueue.update({
         where: { id: message.id },
         data: { status: "PROCESSING" },
       });
-      
+
       try {
         const payload = message.payload;
-        
+
         switch (message.messageType) {
           case "product_create":
             {
@@ -572,7 +684,7 @@ export async function processMessageQueue(prisma) {
               }
             }
             break;
-            
+
           case "product_update":
             {
               const product = await prisma.product.findUnique({
@@ -583,11 +695,11 @@ export async function processMessageQueue(prisma) {
               }
             }
             break;
-            
+
           case "product_remove":
             await markProductAsRemoved(prisma, payload.productId);
             break;
-            
+
           case "quick_pickup_add":
             {
               const product = await prisma.product.findUnique({
@@ -598,11 +710,11 @@ export async function processMessageQueue(prisma) {
               }
             }
             break;
-            
+
           case "quick_pickup_remove":
             await removeProductFromQuickPickup(prisma, payload.productId);
             break;
-            
+
           case "review":
             {
               const review = await prisma.publicReview.findUnique({
@@ -614,7 +726,7 @@ export async function processMessageQueue(prisma) {
               }
             }
             break;
-            
+
           case "recipe":
             {
               const recipe = await prisma.recipe.findUnique({
@@ -625,8 +737,20 @@ export async function processMessageQueue(prisma) {
               }
             }
             break;
+
+          case "order_notification":
+            {
+              const order = await prisma.order.findUnique({
+                where: { id: payload.orderId },
+                include: { user: true },
+              });
+              if (order) {
+                await sendOrderNotificationToAdmin(prisma, order, order.user);
+              }
+            }
+            break;
         }
-        
+
         await prisma.telegramMessageQueue.update({
           where: { id: message.id },
           data: {
@@ -636,10 +760,10 @@ export async function processMessageQueue(prisma) {
         });
       } catch (error) {
         console.error(`Failed to process message ${message.id}:`, error);
-        
+
         const newAttempts = message.attempts + 1;
         const isFailed = newAttempts >= message.maxAttempts;
-        
+
         await prisma.telegramMessageQueue.update({
           where: { id: message.id },
           data: {
@@ -647,7 +771,9 @@ export async function processMessageQueue(prisma) {
             attempts: newAttempts,
             error: error.message,
             // Повторная попытка через 5 минут
-            scheduledFor: isFailed ? message.scheduledFor : new Date(Date.now() + 5 * 60 * 1000),
+            scheduledFor: isFailed
+              ? message.scheduledFor
+              : new Date(Date.now() + 5 * 60 * 1000),
           },
         });
       }
@@ -660,7 +786,12 @@ export async function processMessageQueue(prisma) {
 /**
  * Добавление задачи в очередь
  */
-export async function enqueueMessage(prisma, messageType, payload, scheduledFor = new Date()) {
+export async function enqueueMessage(
+  prisma,
+  messageType,
+  payload,
+  scheduledFor = new Date()
+) {
   return await prisma.telegramMessageQueue.create({
     data: {
       messageType,

@@ -453,6 +453,7 @@ export class AuthService {
         telegramUsername,
         telegramPhotoUrl,
         avatarPath: null,
+        referralCode: this.generateReferralCode(),
       });
     } else {
       // Update telegram data if user exists
@@ -811,6 +812,16 @@ export class AuthService {
     } catch (error) {
       console.error("[AuthService] Failed to send verification email:", error);
     }
+  }
+
+  /**
+   * Generate referral code for new users
+   * @private
+   */
+  generateReferralCode() {
+    const timestamp = Date.now().toString(36).toUpperCase();
+    const randomPart = Math.random().toString(36).substr(2, 6).toUpperCase();
+    return `REF${timestamp}${randomPart}`;
   }
 
   /**

@@ -153,7 +153,9 @@ export function configureContainer(prisma) {
       new ProductService(
         c.resolve("productRepository"),
         c.resolve("inventoryService"),
-        c.resolve("collectionRepository")
+        c.resolve("collectionRepository"),
+        c.resolve("telegramBotService"),
+        c.resolve("prisma")
       )
   );
 
@@ -188,7 +190,8 @@ export function configureContainer(prisma) {
         c.resolve("productRepository"),
         c.resolve("collectionRepository"),
         c.resolve("pricingService"),
-        c.resolve("inventoryService")
+        c.resolve("inventoryService"),
+        c.resolve("telegramBotService")
       )
   );
 

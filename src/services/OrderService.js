@@ -12,7 +12,8 @@ export class OrderService {
     productRepository,
     collectionRepository,
     pricingService,
-    inventoryService
+    inventoryService,
+    telegramBotService
   ) {
     this.orderRepo = orderRepository;
     this.cartRepo = cartRepository;
@@ -20,6 +21,7 @@ export class OrderService {
     this.collectionRepo = collectionRepository;
     this.pricingService = pricingService;
     this.inventoryService = inventoryService;
+    this.telegramBotService = telegramBotService;
   }
 
   /**
@@ -115,6 +117,17 @@ export class OrderService {
 
       return createdOrder;
     });
+
+    // Send notification to admin via Telegram
+    if (this.telegramBotService) {
+      try {
+        await this.telegramBotService.enqueueMessage("order_notification", {
+          orderId: order.id,
+        });
+      } catch (error) {
+        console.error("Failed to enqueue order notification:", error);
+      }
+    }
 
     return order;
   }
@@ -486,6 +499,17 @@ export class OrderService {
 
       return createdOrder;
     });
+
+    // Send notification to admin via Telegram
+    if (this.telegramBotService) {
+      try {
+        await this.telegramBotService.enqueueMessage("order_notification", {
+          orderId: order.id,
+        });
+      } catch (error) {
+        console.error("Failed to enqueue guest order notification:", error);
+      }
+    }
 
     return order;
   }

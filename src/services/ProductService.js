@@ -5,10 +5,18 @@ import {
 import { validateRequired } from "../core/validators/index.js";
 
 export class ProductService {
-  constructor(productRepository, inventoryService, collectionRepository) {
+  constructor(
+    productRepository,
+    inventoryService,
+    collectionRepository,
+    telegramBotService,
+    prisma
+  ) {
     this.productRepo = productRepository;
     this.inventoryService = inventoryService;
     this.collectionRepo = collectionRepository;
+    this.telegramBotService = telegramBotService;
+    this.prisma = prisma;
   }
 
   /**
@@ -88,14 +96,41 @@ export class ProductService {
         data.canPickupNow !== undefined ? Boolean(data.canPickupNow) : false,
     };
 
-    return this.productRepo.create(productData);
+    const product = await this.productRepo.create(productData);
+
+    // Send to Telegram if category is set
+    if (product.category && this.telegramBotService && this.prisma) {
+      try {
+        const category = await this.prisma.category.findUnique({
+          where: { name: product.category, isActive: true },
+        });
+
+        if (category) {
+          await this.telegramBotService.enqueueMessage("product_create", {
+            productId: product.id,
+            categoryId: category.id,
+          });
+        }
+
+        // Send to quick pickup chat if canPickupNow is true
+        if (product.canPickupNow) {
+          await this.telegramBotService.enqueueMessage("quick_pickup_add", {
+            productId: product.id,
+          });
+        }
+      } catch (error) {
+        console.error("Failed to enqueue product telegram message:", error);
+      }
+    }
+
+    return product;
   }
 
   /**
    * Update product
    */
   async updateProduct(productId, data) {
-    await this.productRepo.findByIdOrFail(productId);
+    const oldProduct = await this.productRepo.findByIdOrFail(productId);
 
     const updateData = {};
 
@@ -135,7 +170,53 @@ export class ProductService {
       updateData.searchKeywords = data.searchKeywords?.trim() || null;
     }
 
-    return this.productRepo.update(productId, updateData);
+    const product = await this.productRepo.update(productId, updateData);
+
+    // Handle Telegram notifications
+    if (this.telegramBotService && this.prisma) {
+      try {
+        // If product was deactivated, mark as removed
+        if (data.isActive === false && oldProduct.isActive === true) {
+          await this.telegramBotService.enqueueMessage("product_remove", {
+            productId: product.id,
+          });
+        }
+        // If product is active and has category, update message
+        else if (product.isActive && product.category) {
+          const category = await this.prisma.category.findUnique({
+            where: { name: product.category, isActive: true },
+          });
+
+          if (category) {
+            await this.telegramBotService.enqueueMessage("product_update", {
+              productId: product.id,
+              categoryId: category.id,
+            });
+          }
+        }
+
+        // Handle quick pickup changes
+        const wasQuickPickup = oldProduct.canPickupNow;
+        const isQuickPickup = product.canPickupNow;
+
+        if (!wasQuickPickup && isQuickPickup) {
+          await this.telegramBotService.enqueueMessage("quick_pickup_add", {
+            productId: product.id,
+          });
+        } else if (wasQuickPickup && !isQuickPickup) {
+          await this.telegramBotService.enqueueMessage("quick_pickup_remove", {
+            productId: product.id,
+          });
+        }
+      } catch (error) {
+        console.error(
+          "Failed to enqueue product update telegram message:",
+          error
+        );
+      }
+    }
+
+    return product;
   }
 
   /**
@@ -160,7 +241,35 @@ export class ProductService {
    */
   async updateImage(productId, imagePath) {
     await this.productRepo.findByIdOrFail(productId);
-    return this.productRepo.updateImage(productId, imagePath);
+    const product = await this.productRepo.updateImage(productId, imagePath);
+
+    // Update Telegram message with new image
+    if (
+      product.isActive &&
+      product.category &&
+      this.telegramBotService &&
+      this.prisma
+    ) {
+      try {
+        const category = await this.prisma.category.findUnique({
+          where: { name: product.category, isActive: true },
+        });
+
+        if (category) {
+          await this.telegramBotService.enqueueMessage("product_update", {
+            productId: product.id,
+            categoryId: category.id,
+          });
+        }
+      } catch (error) {
+        console.error(
+          "Failed to enqueue product image update telegram message:",
+          error
+        );
+      }
+    }
+
+    return product;
   }
 
   /**
