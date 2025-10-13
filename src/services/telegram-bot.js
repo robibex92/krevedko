@@ -339,6 +339,10 @@ export async function markProductAsRemoved(prisma, productId) {
       include: { category: true },
     });
 
+    console.log(
+      `[markProductAsRemoved] Found ${messages.length} messages for product ${productId}`
+    );
+
     for (const messageRecord of messages) {
       const removedText = buildProductRemovedMessage(messageRecord.messageText);
       const chatId = messageRecord.category.telegramChatId;
@@ -760,6 +764,9 @@ export async function processMessageQueue(prisma) {
             break;
 
           case "product_remove":
+            console.log(
+              `[queue] Processing product_remove for productId: ${payload.productId}`
+            );
             await markProductAsRemoved(prisma, payload.productId);
             break;
 
