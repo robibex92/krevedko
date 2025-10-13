@@ -119,15 +119,15 @@ export async function sendTelegramPhoto(
     // Используем встроенный FormData (Node.js 20+)
     const formData = new FormData();
     formData.append("chat_id", String(chatId));
-    
+
     // Читаем файл в Buffer и создаем File объект (Node.js 20+)
     const fileBuffer = await fs.readFile(photoPath);
     const fileName = path.basename(photoPath);
-    
+
     // Создаем File объект (Node.js 20+) или Blob с именем (fallback)
     const file = new FileAPI([fileBuffer], fileName, { type: "image/jpeg" });
     formData.append("photo", file, fileName);
-    
+
     if (caption) formData.append("caption", caption);
     formData.append("parse_mode", options.parseMode || "HTML");
     if (options.threadId)
@@ -220,33 +220,60 @@ export async function editTelegramMessageMedia(
   }
   const fetchImpl = await ensureFetch();
   const url = `https://api.telegram.org/bot${token}/editMessageMedia`;
+  const isUrl =
+    typeof photoPath === "string" && /^https?:\/\//i.test(photoPath);
 
-  // Используем встроенный FormData (Node.js 20+)
-  const formData = new FormData();
-  formData.append("chat_id", String(chatId));
-  formData.append("message_id", String(messageId));
+  let res;
+  if (isUrl) {
+    // Если photoPath - это URL, используем его напрямую
+    const media = {
+      type: "photo",
+      media: photoPath,
+    };
+    if (caption) {
+      media.caption = caption;
+      media.parse_mode = options.parseMode || "HTML";
+    }
 
-  const media = {
-    type: "photo",
-    media: "attach://photo",
-  };
-  if (caption) {
-    media.caption = caption;
-    media.parse_mode = options.parseMode || "HTML";
+    const body = {
+      chat_id: chatId,
+      message_id: messageId,
+      media: media,
+    };
+
+    res = await fetchImpl(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+  } else {
+    // Если photoPath - это локальный файл
+    const formData = new FormData();
+    formData.append("chat_id", String(chatId));
+    formData.append("message_id", String(messageId));
+
+    const media = {
+      type: "photo",
+      media: "attach://photo",
+    };
+    if (caption) {
+      media.caption = caption;
+      media.parse_mode = options.parseMode || "HTML";
+    }
+
+    formData.append("media", JSON.stringify(media));
+
+    // Читаем файл в Buffer и создаем File объект (Node.js 20+) или Blob (fallback)
+    const fileBuffer = await fs.readFile(photoPath);
+    const fileName = path.basename(photoPath);
+    const file = new FileAPI([fileBuffer], fileName, { type: "image/jpeg" });
+    formData.append("photo", file, fileName);
+
+    res = await fetchImpl(url, {
+      method: "POST",
+      body: formData,
+    });
   }
-
-  formData.append("media", JSON.stringify(media));
-  
-  // Читаем файл в Buffer и создаем File объект (Node.js 20+) или Blob (fallback)
-  const fileBuffer = await fs.readFile(photoPath);
-  const fileName = path.basename(photoPath);
-  const file = new FileAPI([fileBuffer], fileName, { type: "image/jpeg" });
-  formData.append("photo", file, fileName);
-
-  const res = await fetchImpl(url, {
-    method: "POST",
-    body: formData,
-  });
 
   if (!res.ok) {
     const bodyText = await res.text();
