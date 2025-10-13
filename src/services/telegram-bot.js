@@ -586,56 +586,119 @@ export async function sendOrderNotificationToAdmin(prisma, order, user) {
       return;
     }
 
-    const lines = [];
-    lines.push("<b>🛒 Новый заказ на сайте!</b>");
-    lines.push("");
-    lines.push(`📋 Номер заказа: <b>${order.orderNumber}</b>`);
+    // Получаем полную информацию о заказе с товарами
+    const fullOrder = await prisma.order.findUnique({
+      where: { id: order.id },
+      include: {
+        items: {
+          include: {
+            product: true,
+          },
+        },
+        user: true,
+        collection: true,
+      },
+    });
 
-    if (user) {
+    if (!fullOrder) {
+      console.warn(`Order ${order.id} not found for notification`);
+      return;
+    }
+
+    const lines = [];
+    const versionSuffix =
+      fullOrder.editVersion > 1 ? `_v${fullOrder.editVersion}` : "";
+    const isUpdate = fullOrder.editVersion > 1;
+
+    lines.push(
+      isUpdate ? "<b>📝 Заказ изменен!</b>" : "<b>🛒 Новый заказ на сайте!</b>"
+    );
+    lines.push("");
+    lines.push(
+      `📋 Номер заказа: <b>${fullOrder.orderNumber || `ORD-${fullOrder.id}`}${versionSuffix}</b>`
+    );
+
+    // Информация о клиенте
+    if (user || fullOrder.user) {
+      const orderUser = user || fullOrder.user;
       const fullName =
-        [user.firstName, user.lastName].filter(Boolean).join(" ") ||
-        user.name ||
+        [orderUser.firstName, orderUser.lastName].filter(Boolean).join(" ") ||
+        orderUser.name ||
         "Клиент";
       lines.push(`👤 От: ${fullName}`);
 
-      if (user.telegramUsername) {
-        lines.push(`📱 Telegram: @${user.telegramUsername}`);
-      } else if (user.email) {
-        lines.push(`📧 Email: ${user.email}`);
-      } else if (user.phone) {
-        lines.push(`📞 Телефон: ${user.phone}`);
+      if (orderUser.telegramUsername) {
+        lines.push(`📱 Telegram: @${orderUser.telegramUsername}`);
+      } else if (orderUser.email) {
+        lines.push(`📧 Email: ${orderUser.email}`);
+      } else if (orderUser.phone) {
+        lines.push(`📞 Телефон: ${orderUser.phone}`);
       }
-    } else if (order.isGuestOrder) {
+    } else if (fullOrder.isGuestOrder) {
       lines.push(`👤 Гостевой заказ`);
-      if (order.guestName) {
-        lines.push(`   Имя: ${order.guestName}`);
+      if (fullOrder.guestName) {
+        lines.push(`   Имя: ${fullOrder.guestName}`);
       }
-      if (order.guestPhone) {
-        lines.push(`   📞 ${order.guestPhone}`);
+      if (fullOrder.guestPhone) {
+        lines.push(`   📞 ${fullOrder.guestPhone}`);
       }
-      if (order.guestEmail) {
-        lines.push(`   📧 ${order.guestEmail}`);
+      if (fullOrder.guestEmail) {
+        lines.push(`   📧 ${fullOrder.guestEmail}`);
       }
-      if (order.guestContactInfo) {
-        lines.push(`   💬 ${order.guestContactInfo}`);
+      if (fullOrder.guestContactInfo) {
+        lines.push(`   💬 ${fullOrder.guestContactInfo}`);
       }
     }
 
-    lines.push("");
-    lines.push(`💰 Сумма: <b>${formatPrice(order.totalKopecks)}</b>`);
+    // Период
+    if (fullOrder.collection?.title) {
+      lines.push(`📅 Период: ${fullOrder.collection.title}`);
+    }
 
-    if (order.deliveryType === "DELIVERY") {
+    // Доставка
+    lines.push("");
+    if (fullOrder.deliveryType === "DELIVERY") {
       lines.push(`🚚 Доставка`);
-      if (order.deliveryAddress) {
-        lines.push(`   ${order.deliveryAddress}`);
+      if (fullOrder.deliveryAddress) {
+        lines.push(`   📍 ${fullOrder.deliveryAddress}`);
       }
     } else {
       lines.push(`🏪 Самовывоз`);
     }
 
+    // Товары в заказе
+    lines.push("");
+    lines.push("<b>📦 Состав заказа:</b>");
+
+    (fullOrder.items || []).forEach((item, index) => {
+      const title = item.titleSnapshot || item.product?.title || "Товар";
+      const qty = item.quantityDecimal || item.quantity || 0;
+      const unit = item.unitLabelSnapshot || item.product?.unitLabel || "шт";
+      const price = formatPrice(item.subtotalKopecks || 0);
+
+      lines.push(`${index + 1}. ${title}`);
+      lines.push(
+        `   ${qty} ${unit} × ${formatPrice(item.unitPriceKopecks || 0)} = ${price}`
+      );
+    });
+
+    // Итого
+    lines.push("");
+    lines.push(`💰 <b>ИТОГО: ${formatPrice(fullOrder.totalKopecks)}</b>`);
+
+    // Дата заказа
+    const orderDate = new Date(fullOrder.createdAt).toLocaleString("ru-RU", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+    lines.push(`🕐 ${orderDate}`);
+
     const messageText = lines.join("\n");
 
-    await sendTelegramMessage(adminChatId, messageText, {});
+    await sendTelegramMessage(adminChatId, messageText, { parse_mode: "HTML" });
   } catch (error) {
     console.error(
       `Failed to send order ${order.id} notification to admin:`,
@@ -739,6 +802,7 @@ export async function processMessageQueue(prisma) {
             break;
 
           case "order_notification":
+          case "order_update":
             {
               const order = await prisma.order.findUnique({
                 where: { id: payload.orderId },

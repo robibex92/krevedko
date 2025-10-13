@@ -987,6 +987,309 @@ router.post(
   }
 );
 
+// Update order item quantity
+router.patch(
+  "/admin/orders/items/:itemId/quantity",
+  requireAuth,
+  requireAdmin,
+  async (req, res) => {
+    const prisma = req.app.locals.prisma;
+    const telegramBotService =
+      req.app.locals.container?.resolve("telegramBotService");
+
+    try {
+      const itemId = Number(req.params.itemId);
+      const { quantity } = req.body || {};
+
+      if (!itemId || isNaN(itemId)) {
+        return res.status(400).json({ error: "INVALID_ITEM_ID" });
+      }
+
+      const numQuantity = parseFloat(quantity);
+      if (!numQuantity || isNaN(numQuantity) || numQuantity <= 0) {
+        return res.status(400).json({ error: "INVALID_QUANTITY" });
+      }
+
+      // Находим товар в заказе
+      const orderItem = await prisma.orderItem.findUnique({
+        where: { id: itemId },
+        include: { order: true },
+      });
+
+      if (!orderItem) {
+        return res.status(404).json({ error: "ORDER_ITEM_NOT_FOUND" });
+      }
+
+      // Вычисляем новую сумму
+      const newSubtotal = Math.round(numQuantity * orderItem.unitPriceKopecks);
+
+      // Обновляем количество и подитог в транзакции
+      const result = await prisma.$transaction(async (tx) => {
+        // Обновляем товар в заказе
+        const updatedItem = await tx.orderItem.update({
+          where: { id: itemId },
+          data: {
+            quantityDecimal: String(numQuantity),
+            subtotalKopecks: newSubtotal,
+          },
+        });
+
+        // Пересчитываем общую сумму заказа
+        const allItems = await tx.orderItem.findMany({
+          where: { orderId: orderItem.orderId },
+        });
+
+        const totalKopecks = allItems.reduce(
+          (sum, item) => sum + (item.subtotalKopecks || 0),
+          0
+        );
+
+        const deliveryCost = orderItem.order.deliveryCost || 0;
+        const finalTotal = totalKopecks + deliveryCost;
+
+        // Обновляем итоговую сумму заказа и увеличиваем версию
+        const updatedOrder = await tx.order.update({
+          where: { id: orderItem.orderId },
+          data: {
+            totalKopecks: finalTotal,
+            editVersion: { increment: 1 },
+          },
+          include: { items: true, user: true, collection: true },
+        });
+
+        return { item: updatedItem, order: updatedOrder };
+      });
+
+      // Отправляем обновленную фактуру в Telegram
+      if (telegramBotService) {
+        try {
+          await telegramBotService.enqueueMessage("order_update", {
+            orderId: result.order.id,
+          });
+        } catch (error) {
+          console.error("Failed to enqueue order update notification:", error);
+        }
+      }
+
+      res.json(result);
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ error: "ORDER_ITEM_UPDATE_FAILED" });
+    }
+  }
+);
+
+// Delete order item
+router.delete(
+  "/admin/orders/items/:itemId",
+  requireAuth,
+  requireAdmin,
+  async (req, res) => {
+    const prisma = req.app.locals.prisma;
+    const telegramBotService =
+      req.app.locals.container?.resolve("telegramBotService");
+
+    try {
+      const itemId = Number(req.params.itemId);
+
+      if (!itemId || isNaN(itemId)) {
+        return res.status(400).json({ error: "INVALID_ITEM_ID" });
+      }
+
+      // Находим товар в заказе
+      const orderItem = await prisma.orderItem.findUnique({
+        where: { id: itemId },
+        include: { order: true },
+      });
+
+      if (!orderItem) {
+        return res.status(404).json({ error: "ORDER_ITEM_NOT_FOUND" });
+      }
+
+      // Проверяем что это не единственный товар
+      const itemsCount = await prisma.orderItem.count({
+        where: { orderId: orderItem.orderId },
+      });
+
+      if (itemsCount <= 1) {
+        return res.status(400).json({ error: "CANNOT_DELETE_LAST_ITEM" });
+      }
+
+      // Удаляем товар и пересчитываем сумму в транзакции
+      const result = await prisma.$transaction(async (tx) => {
+        // Удаляем товар
+        await tx.orderItem.delete({
+          where: { id: itemId },
+        });
+
+        // Пересчитываем общую сумму заказа
+        const remainingItems = await tx.orderItem.findMany({
+          where: { orderId: orderItem.orderId },
+        });
+
+        const totalKopecks = remainingItems.reduce(
+          (sum, item) => sum + (item.subtotalKopecks || 0),
+          0
+        );
+
+        const deliveryCost = orderItem.order.deliveryCost || 0;
+        const finalTotal = totalKopecks + deliveryCost;
+
+        // Обновляем итоговую сумму заказа и увеличиваем версию
+        const updatedOrder = await tx.order.update({
+          where: { id: orderItem.orderId },
+          data: {
+            totalKopecks: finalTotal,
+            editVersion: { increment: 1 },
+          },
+          include: { items: true, user: true, collection: true },
+        });
+
+        return updatedOrder;
+      });
+
+      // Отправляем обновленную фактуру в Telegram
+      if (telegramBotService) {
+        try {
+          await telegramBotService.enqueueMessage("order_update", {
+            orderId: result.id,
+          });
+        } catch (error) {
+          console.error("Failed to enqueue order update notification:", error);
+        }
+      }
+
+      res.json({ order: result });
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ error: "ORDER_ITEM_DELETE_FAILED" });
+    }
+  }
+);
+
+// Add order item
+router.post(
+  "/admin/orders/:orderId/items",
+  requireAuth,
+  requireAdmin,
+  async (req, res) => {
+    const prisma = req.app.locals.prisma;
+    const telegramBotService =
+      req.app.locals.container?.resolve("telegramBotService");
+
+    try {
+      const orderId = Number(req.params.orderId);
+      const { productId, quantity } = req.body || {};
+
+      if (!orderId || isNaN(orderId)) {
+        return res.status(400).json({ error: "INVALID_ORDER_ID" });
+      }
+
+      if (!productId || isNaN(productId)) {
+        return res.status(400).json({ error: "INVALID_PRODUCT_ID" });
+      }
+
+      const numQuantity = parseFloat(quantity);
+      if (!numQuantity || isNaN(numQuantity) || numQuantity <= 0) {
+        return res.status(400).json({ error: "INVALID_QUANTITY" });
+      }
+
+      // Находим заказ
+      const order = await prisma.order.findUnique({
+        where: { id: orderId },
+      });
+
+      if (!order) {
+        return res.status(404).json({ error: "ORDER_NOT_FOUND" });
+      }
+
+      // Находим товар и получаем цену из периода заказа
+      const product = await prisma.product.findUnique({
+        where: { id: productId },
+      });
+
+      if (!product) {
+        return res.status(404).json({ error: "PRODUCT_NOT_FOUND" });
+      }
+
+      // Получаем цену товара для этого периода
+      let unitPriceKopecks = product.priceKopecks;
+
+      if (order.collectionId) {
+        const override = await prisma.collectionPriceOverride.findFirst({
+          where: {
+            collectionId: order.collectionId,
+            productId: productId,
+          },
+        });
+        if (override) {
+          unitPriceKopecks = override.priceKopecks;
+        }
+      }
+
+      const subtotalKopecks = Math.round(numQuantity * unitPriceKopecks);
+
+      // Добавляем товар в транзакции
+      const result = await prisma.$transaction(async (tx) => {
+        // Создаем новый элемент заказа
+        const newItem = await tx.orderItem.create({
+          data: {
+            orderId: orderId,
+            productId: productId,
+            titleSnapshot: product.title,
+            unitLabelSnapshot: product.unitLabel,
+            quantityDecimal: String(numQuantity),
+            unitPriceKopecks: unitPriceKopecks,
+            subtotalKopecks: subtotalKopecks,
+            imagePathSnapshot: product.imagePath || null,
+          },
+        });
+
+        // Пересчитываем общую сумму заказа
+        const allItems = await tx.orderItem.findMany({
+          where: { orderId: orderId },
+        });
+
+        const totalKopecks = allItems.reduce(
+          (sum, item) => sum + (item.subtotalKopecks || 0),
+          0
+        );
+
+        const deliveryCost = order.deliveryCost || 0;
+        const finalTotal = totalKopecks + deliveryCost;
+
+        // Обновляем итоговую сумму заказа и увеличиваем версию
+        const updatedOrder = await tx.order.update({
+          where: { id: orderId },
+          data: {
+            totalKopecks: finalTotal,
+            editVersion: { increment: 1 },
+          },
+          include: { items: true, user: true, collection: true },
+        });
+
+        return { item: newItem, order: updatedOrder };
+      });
+
+      // Отправляем обновленную фактуру в Telegram
+      if (telegramBotService) {
+        try {
+          await telegramBotService.enqueueMessage("order_update", {
+            orderId: result.order.id,
+          });
+        } catch (error) {
+          console.error("Failed to enqueue order update notification:", error);
+        }
+      }
+
+      res.json(result);
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ error: "ORDER_ITEM_ADD_FAILED" });
+    }
+  }
+);
+
 // Broadcast preview - получить список получателей без отправки
 router.post(
   "/admin/broadcast/preview",

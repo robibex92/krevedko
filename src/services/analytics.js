@@ -67,8 +67,8 @@ export async function getAnalyticsData(
   try {
     topProductsRaw = await prisma.$queryRaw`
       SELECT oi."productId" AS "productId",
-             COUNT(oi.id)     AS "orderCount",
-             SUM(oi."subtotalKopecks") AS "revenue"
+             COUNT(oi.id)::integer AS "orderCount",
+             SUM(oi."subtotalKopecks")::bigint AS "revenue"
       FROM "OrderItem" oi
       JOIN "Order" o ON o.id = oi."orderId"
       WHERE o."createdAt" >= ${startDate} AND o."createdAt" <= ${endDate}
@@ -97,11 +97,11 @@ export async function getAnalyticsData(
   let dailyOrders = [];
   try {
     dailyOrders = await prisma.$queryRaw`
-      SELECT DATE("createdAt") AS "date",
-             COUNT(*)          AS "orders"
+      SELECT "createdAt"::date AS "date",
+             COUNT(*)::integer AS "orders"
       FROM "Order"
       WHERE "createdAt" >= ${startDate} AND "createdAt" <= ${endDate}
-      GROUP BY DATE("createdAt")
+      GROUP BY "createdAt"::date
       ORDER BY "date" ASC
     `;
   } catch (error) {

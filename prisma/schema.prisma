@@ -171,6 +171,7 @@ model Order {
   submittedAt     DateTime @default(now())
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
+  editVersion     Int      @default(1) // Версия редактирования для Telegram фактур
 
   // Guest checkout поля
   isGuestOrder       Boolean @default(false) // true если userId = null
