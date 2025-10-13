@@ -146,6 +146,48 @@ export function buildRecipeMessage(recipe) {
 }
 
 /**
+ * Редактирование текста/caption сообщения в зависимости от типа
+ */
+async function editMessageTextOrCaption(
+  chatId,
+  messageId,
+  text,
+  hasMedia,
+  mediaType
+) {
+  if (hasMedia && mediaType === "photo") {
+    // Редактируем caption для фото
+    const token = process.env.TELEGRAM_BOT_TOKEN;
+    const editCaptionUrl = `https://api.telegram.org/bot${token}/editMessageCaption`;
+
+    const response = await fetch(editCaptionUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        chat_id: chatId,
+        message_id: messageId,
+        caption: text,
+        parse_mode: "HTML",
+      }),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      if (
+        errorText.includes("message can't be edited") ||
+        errorText.includes("message to edit not found")
+      ) {
+        throw new Error("MESSAGE_TOO_OLD");
+      }
+      throw new Error(`Failed to edit caption: ${response.status}`);
+    }
+  } else {
+    // Редактируем обычное текстовое сообщение
+    await editTelegramMessage(chatId, messageId, text);
+  }
+}
+
+/**
  * Отправка сообщения о товаре в чат категории
  */
 export async function sendProductToCategory(prisma, product, category) {
@@ -274,8 +316,14 @@ export async function updateProductMessage(prisma, product, categoryId) {
             newMessageText
           );
         } else {
-          // Нет доступного медиа — обновляем только текст
-          await editTelegramMessage(chatId, messageId, newMessageText);
+          // Нет доступного медиа — обновляем только caption/текст
+          await editMessageTextOrCaption(
+            chatId,
+            messageId,
+            newMessageText,
+            hadImage,
+            messageRecord.mediaType
+          );
         }
       } else if (hasNewImage && !hadImage) {
         // Было текстовое, стало с фото - удаляем старое, создаем новое
@@ -289,8 +337,14 @@ export async function updateProductMessage(prisma, product, categoryId) {
           messageRecord.category
         );
       } else {
-        // Обновляем только текст
-        await editTelegramMessage(chatId, messageId, newMessageText);
+        // Обновляем только текст/caption
+        await editMessageTextOrCaption(
+          chatId,
+          messageId,
+          newMessageText,
+          hadImage,
+          messageRecord.mediaType
+        );
       }
 
       // Обновляем запись в БД
@@ -353,7 +407,15 @@ export async function markProductAsRemoved(prisma, productId) {
 
       if (canEdit) {
         try {
-          await editTelegramMessage(chatId, messageId, removedText);
+          // Используем универсальную функцию для редактирования
+          await editMessageTextOrCaption(
+            chatId,
+            messageId,
+            removedText,
+            messageRecord.hasMedia,
+            messageRecord.mediaType
+          );
+
           await prisma.productTelegramMessage.update({
             where: { id: messageRecord.id },
             data: {
