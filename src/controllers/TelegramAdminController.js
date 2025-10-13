@@ -63,8 +63,12 @@ export class TelegramAdminController extends BaseController {
    */
   updateSetting = async (req, res) => {
     const key = req.params.key;
-    const { value } = req.body || {};
-    const result = await this.telegramService.updateSetting(key, value);
+    const { chatId, threadId, description } = req.body || {};
+    const result = await this.telegramService.updateSetting(key, {
+      chatId,
+      threadId,
+      description,
+    });
     this.success(res, result);
   };
 }

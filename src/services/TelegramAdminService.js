@@ -87,14 +87,14 @@ export class TelegramAdminService {
   /**
    * Update telegram setting
    */
-  async updateSetting(key, value) {
+  async updateSetting(key, data) {
     if (!key) {
       throw new ValidationError("Key is required", "KEY_REQUIRED");
     }
 
     const setting = await this.telegramRepo.upsertSetting(
       String(key).trim(),
-      value !== undefined ? String(value) : ""
+      data || {}
     );
 
     return { setting };

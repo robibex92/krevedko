@@ -58,11 +58,21 @@ export class TelegramAdminRepository extends BaseRepository {
   /**
    * Upsert telegram setting
    */
-  async upsertSetting(key, value) {
+  async upsertSetting(key, data) {
+    const { chatId, threadId, description } = data || {};
     return this.prisma.telegramSettings.upsert({
       where: { key },
-      update: { value },
-      create: { key, value },
+      update: {
+        chatId: chatId || null,
+        threadId: threadId || null,
+        description: description || null,
+      },
+      create: {
+        key,
+        chatId: chatId || null,
+        threadId: threadId || null,
+        description: description || null,
+      },
     });
   }
 }
