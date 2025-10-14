@@ -1,7 +1,7 @@
 /**
  * Rate Limiting Middleware
  * Защита от spam запросов и DDoS атак
- * 
+ *
  * Использует простую in-memory стратегию с sliding window
  * Для production рекомендуется использовать Redis
  */
@@ -26,7 +26,7 @@ setInterval(cleanupOldEntries, 5 * 60 * 1000);
 
 /**
  * Rate limiter middleware с sliding window algorithm
- * 
+ *
  * @param {Object} options - Опции
  * @param {number} options.windowMs - Окно времени в миллисекундах (по умолчанию 60000 = 1 минута)
  * @param {number} options.max - Максимальное количество запросов в окне (по умолчанию 100)
@@ -41,13 +41,15 @@ export function rateLimitMiddleware(options = {}) {
     message = "Too many requests, please try again later",
     keyGenerator = (req) => {
       // Используем IP из различных источников
-      return req.ip || 
-             req.headers["x-forwarded-for"]?.split(",")[0]?.trim() ||
-             req.headers["x-real-ip"] ||
-             req.connection?.remoteAddress ||
-             "unknown";
+      return (
+        req.ip ||
+        req.headers["x-forwarded-for"]?.split(",")[0]?.trim() ||
+        req.headers["x-real-ip"] ||
+        req.connection?.remoteAddress ||
+        "unknown"
+      );
     },
-    skipSuccessfulRequests = false
+    skipSuccessfulRequests = false,
   } = options;
 
   return (req, res, next) => {
@@ -58,7 +60,7 @@ export function rateLimitMiddleware(options = {}) {
       requestCounts.set(key, {
         count: 1,
         windowStart: now,
-        windowMs
+        windowMs,
       });
       return next();
     }
@@ -76,18 +78,23 @@ export function rateLimitMiddleware(options = {}) {
     // Проверяем лимит
     if (record.count >= max) {
       const retryAfter = Math.ceil((windowMs - timeSinceWindowStart) / 1000);
-      
-      console.warn(`[rate-limit] Rate limit exceeded for ${key} (${record.count}/${max} requests)`);
-      
+
+      console.warn(
+        `[rate-limit] Rate limit exceeded for ${key} (${record.count}/${max} requests)`
+      );
+
       res.set("Retry-After", String(retryAfter));
       res.set("X-RateLimit-Limit", String(max));
       res.set("X-RateLimit-Remaining", "0");
-      res.set("X-RateLimit-Reset", String(Math.ceil((record.windowStart + windowMs) / 1000)));
-      
+      res.set(
+        "X-RateLimit-Reset",
+        String(Math.ceil((record.windowStart + windowMs) / 1000))
+      );
+
       return res.status(429).json({
         error: "RATE_LIMIT_EXCEEDED",
         message,
-        retryAfter: retryAfter
+        retryAfter: retryAfter,
       });
     }
 
@@ -97,12 +104,15 @@ export function rateLimitMiddleware(options = {}) {
     // Устанавливаем заголовки
     res.set("X-RateLimit-Limit", String(max));
     res.set("X-RateLimit-Remaining", String(Math.max(0, max - record.count)));
-    res.set("X-RateLimit-Reset", String(Math.ceil((record.windowStart + windowMs) / 1000)));
+    res.set(
+      "X-RateLimit-Reset",
+      String(Math.ceil((record.windowStart + windowMs) / 1000))
+    );
 
     // Если нужно не учитывать успешные запросы
     if (skipSuccessfulRequests) {
       const originalJson = res.json.bind(res);
-      res.json = function(body) {
+      res.json = function (body) {
         if (res.statusCode >= 200 && res.statusCode < 300) {
           record.count--;
         }
@@ -116,42 +126,42 @@ export function rateLimitMiddleware(options = {}) {
 
 /**
  * Предустановленные конфигурации rate limiting
- * 
+ *
  * Лимиты настроены так, чтобы не мешать обычным пользователям,
  * но защищать от реальных атак
  */
 export const rateLimiters = {
   // Лимит для аутентификации (защита от брутфорса)
-  // Увеличен до 10 попыток - обычный пользователь может ошибиться несколько раз
+  // 5 попыток за 1 минуту - не слишком строго, но защищает от атак
   auth: rateLimitMiddleware({
-    windowMs: 15 * 60 * 1000, // 15 минут
-    max: 10, // 10 попыток (было 5)
-    message: "Слишком много попыток входа. Пожалуйста, повторите через 15 минут"
+    windowMs: 60 * 1000, // 1 минута (было 15 минут)
+    max: 5, // 5 попыток за 1 минуту
+    message: "Слишком много попыток входа. Пожалуйста, повторите через минуту",
   }),
 
   // Лимит для создания заказов
   // Увеличен до 20 - пользователь может создавать несколько заказов подряд
   orders: rateLimitMiddleware({
     windowMs: 60 * 1000, // 1 минута
-    max: 20, // 20 заказов в минуту (было 10)
-    message: "Слишком много заказов. Пожалуйста, подождите минуту"
+    max: 25, // 20 заказов в минуту (было 10)
+    message: "Слишком много заказов. Пожалуйста, подождите минуту",
   }),
 
   // Общий лимит для API
   // Увеличен до 300 - для активного использования сайта
   api: rateLimitMiddleware({
     windowMs: 60 * 1000, // 1 минута
-    max: 300, // 300 запросов в минуту (было 100)
-    message: "Слишком много запросов. Пожалуйста, подождите"
+    max: 1000, // 1000 запросов в минуту (было 100)
+    message: "Слишком много запросов. Пожалуйста, подождите",
   }),
 
   // Лимит для загрузки файлов
   // Увеличен до 20
   upload: rateLimitMiddleware({
     windowMs: 60 * 1000, // 1 минута
-    max: 20, // 20 загрузок в минуту (было 10)
-    message: "Слишком много загрузок. Пожалуйста, подождите"
-  })
+    max: 50, // 20 загрузок в минуту (было 10)
+    message: "Слишком много загрузок. Пожалуйста, подождите",
+  }),
 };
 
 /**
@@ -160,7 +170,7 @@ export const rateLimiters = {
 export function getRateLimitStats() {
   const stats = {
     totalKeys: requestCounts.size,
-    entries: []
+    entries: [],
   };
 
   for (const [key, data] of requestCounts.entries()) {
@@ -168,11 +178,9 @@ export function getRateLimitStats() {
       key,
       count: data.count,
       windowStart: new Date(data.windowStart),
-      windowMs: data.windowMs
+      windowMs: data.windowMs,
     });
   }
 
   return stats;
 }
-
-

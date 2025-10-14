@@ -3,20 +3,20 @@ import crypto from "crypto";
 /**
  * Middleware для добавления уникального Request ID к каждому запросу
  * Позволяет отслеживать запросы через все логи и сервисы
- * 
+ *
  * Request ID передается через:
  * - X-Request-ID header (если клиент передал)
  * - Генерируется автоматически если не передан
  * - Добавляется в response headers
  * - Добавляется в req.requestId
- * 
+ *
  * @example
  * // В логах
  * console.log(`[${req.requestId}] Processing order...`);
- * 
+ *
  * // В ошибках
  * console.error(`[${req.requestId}] Error:`, error);
- * 
+ *
  * // На клиенте
  * // Response headers: X-Request-ID: abc123-def456-ghi789
  */
@@ -82,7 +82,8 @@ export function requestLogger(req, res, next) {
   const originalSend = res.send.bind(res);
   res.send = function (body) {
     const duration = Date.now() - start;
-    const statusColor = res.statusCode >= 400 ? "🔴" : res.statusCode >= 300 ? "🟡" : "🟢";
+    const statusColor =
+      res.statusCode >= 400 ? "🔴" : res.statusCode >= 300 ? "🟡" : "🟢";
 
     req.log.info(
       `${statusColor} ${req.method} ${req.originalUrl || req.url} ${res.statusCode} - ${duration}ms`
@@ -101,7 +102,7 @@ export function includeRequestIdInError(err, req, res, next) {
   // Добавляем Request ID в ошибку
   if (err && req.requestId) {
     err.requestId = req.requestId;
-    
+
     // Если это API ошибка, добавляем в response
     if (res.headersSent) {
       return next(err);
@@ -123,4 +124,3 @@ export function includeRequestIdInError(err, req, res, next) {
     next(err);
   }
 }
-

@@ -26,7 +26,7 @@ router.get("/health", (req, res) => {
  */
 router.get("/health/detailed", async (req, res) => {
   const prisma = req.app?.locals?.prisma;
-  
+
   const health = {
     status: "ok",
     timestamp: new Date().toISOString(),
@@ -48,7 +48,10 @@ router.get("/health/detailed", async (req, res) => {
       await prisma.$queryRaw`SELECT 1`;
       health.checks.database = { status: "ok", message: "Connected" };
     } else {
-      health.checks.database = { status: "error", message: "Prisma not initialized" };
+      health.checks.database = {
+        status: "error",
+        message: "Prisma not initialized",
+      };
       health.status = "degraded";
     }
   } catch (error) {
@@ -77,16 +80,16 @@ router.get("/health/detailed", async (req, res) => {
  */
 router.get("/health/ready", async (req, res) => {
   const prisma = req.app?.locals?.prisma;
-  
+
   try {
     // Проверяем критичные зависимости
     if (!prisma) {
       throw new Error("Prisma not initialized");
     }
-    
+
     // Проверяем подключение к БД
     await prisma.$queryRaw`SELECT 1`;
-    
+
     res.status(200).json({
       status: "ready",
       timestamp: new Date().toISOString(),
@@ -120,7 +123,7 @@ router.get("/health/live", (req, res) => {
 router.get("/health/metrics", (req, res) => {
   const mem = process.memoryUsage();
   const cpuUsage = process.cpuUsage();
-  
+
   const metrics = {
     timestamp: new Date().toISOString(),
     uptime_seconds: Math.floor(process.uptime()),
@@ -146,4 +149,3 @@ router.get("/health/metrics", (req, res) => {
 });
 
 export default router;
-
