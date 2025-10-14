@@ -51,6 +51,7 @@ import {
 import { rateLimiters } from "./middleware/rateLimit.js";
 import { sanitizeInput } from "./middleware/inputSanitization.js";
 import { securityLogger } from "./middleware/securityLogger.js";
+import { requestIdMiddleware, requestLogger } from "./middleware/requestId.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -121,6 +122,10 @@ app.use(cookieParser());
 app.use(passport.initialize());
 
 // ===== SECURITY MIDDLEWARES =====
+// 0. Request ID (должен быть самым первым для трейсинга)
+app.use(requestIdMiddleware);
+app.use(requestLogger);
+
 // 1. Security logging (должен быть первым для логирования всех запросов)
 app.use(securityLogger);
 
@@ -154,6 +159,10 @@ app.use(
   })
 );
 
+// Health check endpoints (должны быть ДО middleware безопасности)
+import healthRouter from "./routes/health.js";
+app.use("/", healthRouter);
+
 // CSRF
 app.get("/api/csrf", csrfIssue);
 app.use((req, res, next) => {
@@ -164,7 +173,8 @@ app.use((req, res, next) => {
     req.path === "/api/auth/telegram/verify" ||
     req.path === "/api/auth/logout" ||
     req.path === "/api/test-upload" ||
-    req.path.startsWith("/api/auth/oauth/") // Skip CSRF for OAuth
+    req.path.startsWith("/api/auth/oauth/") || // Skip CSRF for OAuth
+    req.path.startsWith("/health") // Skip CSRF for health checks
   ) {
     return next();
   }
