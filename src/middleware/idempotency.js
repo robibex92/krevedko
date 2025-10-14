@@ -3,13 +3,13 @@ import crypto from "crypto";
 /**
  * Middleware для защиты от дублирования запросов (idempotency)
  * Использует уникальный ключ (Idempotency-Key header) для отслеживания запросов
- * 
+ *
  * Принцип работы:
  * 1. Клиент генерирует уникальный ключ перед отправкой запроса
  * 2. При первом запросе с ключом - обрабатываем и сохраняем результат
  * 3. При повторном запросе с тем же ключом - возвращаем сохраненный результат
  * 4. Ключи хранятся 24 часа
- * 
+ *
  * @param {Object} options - Опции middleware
  * @param {number} options.ttlHours - Время жизни ключа в часах (по умолчанию 24)
  */
@@ -23,18 +23,24 @@ export function idempotencyMiddleware(options = {}) {
       return next();
     }
 
-    const idempotencyKey = req.headers["idempotency-key"] || req.headers["x-idempotency-key"];
-    
+    const idempotencyKey =
+      req.headers["idempotency-key"] || req.headers["x-idempotency-key"];
+
     // Если ключ не передан, продолжаем без проверки (backward compatibility)
     if (!idempotencyKey) {
       return next();
     }
 
     // Валидация формата ключа (должен быть UUID или random string)
-    if (typeof idempotencyKey !== "string" || idempotencyKey.length < 16 || idempotencyKey.length > 256) {
+    if (
+      typeof idempotencyKey !== "string" ||
+      idempotencyKey.length < 16 ||
+      idempotencyKey.length > 256
+    ) {
       return res.status(400).json({
         error: "INVALID_IDEMPOTENCY_KEY",
-        message: "Idempotency-Key must be a string between 16 and 256 characters"
+        message:
+          "Idempotency-Key must be a string between 16 and 256 characters",
       });
     }
 
@@ -59,12 +65,12 @@ export function idempotencyMiddleware(options = {}) {
 
       // Проверяем, существует ли ключ
       const existing = await prisma.idempotencyKey.findUnique({
-        where: { key: idempotencyKey }
+        where: { key: idempotencyKey },
       });
 
       if (existing) {
         // Проверка, что запрос от того же пользователя/сессии
-        const isSameUser = 
+        const isSameUser =
           (userId && existing.userId === userId) ||
           (sessionId && existing.sessionId === sessionId) ||
           (!userId && !sessionId);
@@ -72,7 +78,7 @@ export function idempotencyMiddleware(options = {}) {
         if (!isSameUser) {
           return res.status(403).json({
             error: "IDEMPOTENCY_KEY_MISMATCH",
-            message: "Idempotency key belongs to a different user"
+            message: "Idempotency key belongs to a different user",
           });
         }
 
@@ -80,32 +86,39 @@ export function idempotencyMiddleware(options = {}) {
         if (existing.requestHash !== requestHash) {
           return res.status(422).json({
             error: "IDEMPOTENCY_KEY_CONFLICT",
-            message: "Idempotency key is already used for a different request"
+            message: "Idempotency key is already used for a different request",
           });
         }
 
         // Если запрос уже обработан, возвращаем сохраненный результат
         if (existing.responseStatus && existing.responseBody) {
-          console.log(`[idempotency] Returning cached response for key: ${idempotencyKey.substring(0, 8)}...`);
-          
+          console.log(
+            `[idempotency] Returning cached response for key: ${idempotencyKey.substring(0, 8)}...`
+          );
+
           try {
             const cachedResponse = JSON.parse(existing.responseBody);
             return res.status(existing.responseStatus).json(cachedResponse);
           } catch (error) {
-            console.error("[idempotency] Error parsing cached response:", error);
+            console.error(
+              "[idempotency] Error parsing cached response:",
+              error
+            );
             // Если не можем распарсить, продолжаем обработку
           }
         }
 
         // Если запрос в процессе обработки (был создан недавно, но нет ответа)
         const processingThreshold = 60 * 1000; // 60 секунд
-        const isProcessing = !existing.responseStatus && 
-          (Date.now() - existing.createdAt.getTime() < processingThreshold);
+        const isProcessing =
+          !existing.responseStatus &&
+          Date.now() - existing.createdAt.getTime() < processingThreshold;
 
         if (isProcessing) {
           return res.status(409).json({
             error: "REQUEST_IN_PROGRESS",
-            message: "Request with this idempotency key is currently being processed"
+            message:
+              "Request with this idempotency key is currently being processed",
           });
         }
       }
@@ -122,8 +135,8 @@ export function idempotencyMiddleware(options = {}) {
             sessionId,
             endpoint,
             requestHash,
-            expiresAt
-          }
+            expiresAt,
+          },
         });
       }
 
@@ -132,20 +145,20 @@ export function idempotencyMiddleware(options = {}) {
       const originalStatus = res.status.bind(res);
       let statusCode = 200;
 
-      res.status = function(code) {
+      res.status = function (code) {
         statusCode = code;
         return originalStatus(code);
       };
 
-      res.json = async function(body) {
+      res.json = async function (body) {
         // Сохраняем результат в БД
         try {
           await prisma.idempotencyKey.update({
             where: { key: idempotencyKey },
             data: {
               responseStatus: statusCode,
-              responseBody: JSON.stringify(body)
-            }
+              responseBody: JSON.stringify(body),
+            },
           });
         } catch (error) {
           console.error("[idempotency] Error saving response:", error);
@@ -177,9 +190,9 @@ export async function cleanupExpiredIdempotencyKeys(prisma) {
     const result = await prisma.idempotencyKey.deleteMany({
       where: {
         expiresAt: {
-          lt: new Date()
-        }
-      }
+          lt: new Date(),
+        },
+      },
     });
     console.log(`[idempotency] Cleaned up ${result.count} expired keys`);
     return result.count;
@@ -188,5 +201,3 @@ export async function cleanupExpiredIdempotencyKeys(prisma) {
     return 0;
   }
 }
-
-
