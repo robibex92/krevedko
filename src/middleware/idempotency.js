@@ -167,6 +167,12 @@ export function idempotencyMiddleware(options = {}) {
  * Очистка устаревших ключей idempotency (запускать периодически)
  */
 export async function cleanupExpiredIdempotencyKeys(prisma) {
+  // Проверка что prisma передан и инициализирован
+  if (!prisma || !prisma.idempotencyKey) {
+    console.warn("[idempotency] Cleanup skipped: Prisma not initialized");
+    return 0;
+  }
+
   try {
     const result = await prisma.idempotencyKey.deleteMany({
       where: {

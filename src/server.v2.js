@@ -268,10 +268,12 @@ cleanupInterval = setInterval(
   6 * 60 * 60 * 1000
 ); // 6 hours
 
-// Initial cleanup on startup
-cleanupExpiredIdempotencyKeys(prisma).catch((err) =>
-  console.error("[security] Initial cleanup failed:", err)
-);
+// Initial cleanup on startup (с задержкой 10 секунд для подключения к БД)
+setTimeout(() => {
+  cleanupExpiredIdempotencyKeys(prisma).catch((err) =>
+    console.error("[security] Initial cleanup failed:", err)
+  );
+}, 10000);
 
 async function shutdown(signal) {
   try {
