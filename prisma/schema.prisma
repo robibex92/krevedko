@@ -496,3 +496,20 @@ model OAuthAccount {
   @@index([provider])
   @@index([email])
 }
+
+model IdempotencyKey {
+  id             Int       @id @default(autoincrement())
+  key            String    @unique
+  userId         Int?
+  sessionId      String?
+  endpoint       String
+  requestHash    String
+  responseStatus Int?
+  responseBody   String?   @db.Text
+  createdAt      DateTime  @default(now())
+  expiresAt      DateTime
+
+  @@index([userId])
+  @@index([sessionId])
+  @@index([expiresAt])
+}

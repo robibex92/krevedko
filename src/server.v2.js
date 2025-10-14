@@ -43,6 +43,15 @@ import { requireAuth, requireAdmin } from "./middleware/auth.js";
 import { productUpload } from "./services/uploads.js";
 import { processMessageQueue } from "./services/telegram-bot.js";
 
+// Security middlewares
+import {
+  idempotencyMiddleware,
+  cleanupExpiredIdempotencyKeys,
+} from "./middleware/idempotency.js";
+import { rateLimiters } from "./middleware/rateLimit.js";
+import { sanitizeInput } from "./middleware/inputSanitization.js";
+import { securityLogger } from "./middleware/securityLogger.js";
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
@@ -111,6 +120,27 @@ app.use(cookieParser());
 // Initialize Passport (for OAuth)
 app.use(passport.initialize());
 
+// ===== SECURITY MIDDLEWARES =====
+// 1. Security logging (должен быть первым для логирования всех запросов)
+app.use(securityLogger);
+
+// 2. Input sanitization (очистка входных данных от XSS и injection)
+app.use(sanitizeInput);
+
+// 3. Idempotency protection (защита от дублирования запросов)
+app.use(idempotencyMiddleware());
+
+// 4. Rate limiting (защита от DDoS и spam)
+// Строгий лимит для аутентификации (защита от брутфорса)
+app.use("/api/auth/login", rateLimiters.auth);
+app.use("/api/auth/register", rateLimiters.auth);
+// Средний лимит для создания заказов
+app.use("/api/orders", rateLimiters.orders);
+app.use("/api/guest/orders", rateLimiters.orders);
+// Общий лимит для всего API
+app.use("/api", rateLimiters.api);
+// ===== END SECURITY MIDDLEWARES =====
+
 // Static files
 app.use(
   "/uploads",
@@ -123,22 +153,6 @@ app.use(
     },
   })
 );
-
-// Rate limiters
-const authLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 100,
-  standardHeaders: true,
-  legacyHeaders: false,
-});
-const apiLimiter = rateLimit({
-  windowMs: 60 * 1000,
-  max: 1000,
-  standardHeaders: true,
-  legacyHeaders: false,
-});
-app.use("/api/auth", authLimiter);
-app.use("/api", apiLimiter);
 
 // CSRF
 app.get("/api/csrf", csrfIssue);
@@ -230,12 +244,35 @@ if (process.env.TELEGRAM_BOT_TOKEN) {
   );
 }
 
+// Periodic cleanup of expired idempotency keys (каждые 6 часов)
+let cleanupInterval = null;
+console.log("[security] Idempotency keys cleanup enabled");
+cleanupInterval = setInterval(
+  async () => {
+    try {
+      await cleanupExpiredIdempotencyKeys(prisma);
+    } catch (error) {
+      console.error("[security] Failed to cleanup idempotency keys:", error);
+    }
+  },
+  6 * 60 * 60 * 1000
+); // 6 hours
+
+// Initial cleanup on startup
+cleanupExpiredIdempotencyKeys(prisma).catch((err) =>
+  console.error("[security] Initial cleanup failed:", err)
+);
+
 async function shutdown(signal) {
   try {
     console.log(`[server] Received ${signal}, shutting down...`);
     if (queueInterval) {
       clearInterval(queueInterval);
       console.log("[telegram-bot] Queue processor stopped");
+    }
+    if (cleanupInterval) {
+      clearInterval(cleanupInterval);
+      console.log("[security] Cleanup processor stopped");
     }
     await prisma.$disconnect();
     server.close(() => {
