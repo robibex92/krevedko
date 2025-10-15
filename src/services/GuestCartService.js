@@ -129,6 +129,17 @@ export class GuestCartService {
       );
     }
 
+    // Проверяем, что цена определена
+    if (pricing.price === undefined || pricing.price === null) {
+      console.error("[GuestCartService] Pricing.price is undefined:", pricing);
+      throw new BusinessLogicError(
+        "Product price is not available",
+        "PRICE_NOT_AVAILABLE"
+      );
+    }
+
+    console.log("[GuestCartService] Using price:", pricing.price);
+
     // Check if item already exists
     const existingItem = await this.prisma.cartItem.findFirst({
       where: {

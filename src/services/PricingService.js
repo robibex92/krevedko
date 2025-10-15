@@ -49,7 +49,20 @@ export class PricingService {
     const stepDecimal = override?.stepOverrideDecimal ?? product.stepDecimal;
     const step = stepDecimal ? stepDecimal.toString() : "1";
 
-    return {
+    // Проверяем, что цена определена
+    if (price === null || price === undefined) {
+      console.error("[PricingService] Product price is null/undefined:", {
+        productId,
+        collectionId,
+        productPriceKopecks: product.priceKopecks,
+        overridePriceKopecks: override?.priceOverrideKopecks,
+        product,
+        override,
+      });
+      throw new Error(`Product price is not set for product ${productId}`);
+    }
+
+    const result = {
       isAvailable,
       price,
       step,
@@ -57,6 +70,17 @@ export class PricingService {
       override,
       product,
     };
+
+    console.log("[PricingService] Returning pricing result:", {
+      isAvailable,
+      price,
+      priceType: typeof price,
+      step,
+      productId,
+      collectionId,
+    });
+
+    return result;
   }
 
   /**
