@@ -1,7 +1,7 @@
 import { ValidationError } from "../core/errors/AppError.js";
 import path from "path";
 
-const VALID_RATINGS = [2, 3, 4, 5];
+const VALID_RATINGS = [1, 2, 3, 4, 5];
 
 /**
  * Service for public reviews management

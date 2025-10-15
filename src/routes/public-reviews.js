@@ -77,7 +77,7 @@ router.post(
 
       if (!normalizedContent)
         return res.status(400).json({ error: "CONTENT_REQUIRED" });
-      if (![2, 3, 4, 5].includes(ratingValue))
+      if (![1, 2, 3, 4, 5].includes(ratingValue))
         return res.status(400).json({ error: "INVALID_RATING" });
 
       const review = await prisma.publicReview.create({
