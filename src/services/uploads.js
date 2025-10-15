@@ -195,6 +195,14 @@ function watermarkMiddleware(uploadMiddleware) {
 
   // Функция для обработки файла с поддержкой HEIC
   async function processFileWithHeicSupport(file) {
+    console.log("Processing file:", {
+      filename: file.filename,
+      originalname: file.originalname,
+      mimetype: file.mimetype,
+      size: file.size,
+      path: file.path,
+    });
+
     const isHeic =
       file.mimetype === "image/heic" ||
       file.mimetype === "image/heif" ||
@@ -202,11 +210,15 @@ function watermarkMiddleware(uploadMiddleware) {
 
     if (isHeic) {
       try {
+        console.log("Detected HEIC file, converting to JPEG...");
+
         // Читаем HEIC файл
         const heicBuffer = await fs.promises.readFile(file.path);
+        console.log("HEIC file read, size:", heicBuffer.length);
 
         // Конвертируем в JPEG
         const jpegBuffer = await convertHeicToJpeg(heicBuffer);
+        console.log("HEIC converted to JPEG, new size:", jpegBuffer.length);
 
         // Перезаписываем файл с JPEG данными
         await fs.promises.writeFile(file.path, jpegBuffer);
@@ -214,22 +226,36 @@ function watermarkMiddleware(uploadMiddleware) {
         // Обновляем mimetype в объекте файла
         file.mimetype = "image/jpeg";
 
-        console.log(`Converted HEIC file to JPEG: ${file.filename}`);
+        console.log(
+          `Successfully converted HEIC file to JPEG: ${file.filename}`
+        );
       } catch (conversionError) {
         console.error("Error converting HEIC file:", conversionError);
+        console.error("File details:", {
+          filename: file.filename,
+          originalname: file.originalname,
+          mimetype: file.mimetype,
+          size: file.size,
+        });
         // Если конвертация не удалась, продолжаем с оригинальным файлом
       }
     }
 
     // Добавляем водяной знак, если нужно
     if (shouldAddWatermark(file.path)) {
-      await processImageWithWatermark(file.path, file.path, {
-        text: "Ля Креведко",
-        opacity: 0.5,
-        color: "#ffffff",
-        rotation: -15,
-        position: "center",
-      });
+      try {
+        await processImageWithWatermark(file.path, file.path, {
+          text: "Ля Креведко",
+          opacity: 0.5,
+          color: "#ffffff",
+          rotation: -15,
+          position: "center",
+        });
+        console.log("Watermark added to:", file.filename);
+      } catch (watermarkError) {
+        console.error("Error adding watermark:", watermarkError);
+        // Не прерываем процесс, если водяной знак не удалось добавить
+      }
     }
   }
 

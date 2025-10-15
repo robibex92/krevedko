@@ -88,24 +88,48 @@ export class ProductController extends BaseController {
   async uploadImage(req, res) {
     const productId = Number(req.params.id);
 
+    console.log("Product image upload request:", {
+      productId,
+      hasFile: !!req.file,
+      fileDetails: req.file
+        ? {
+            filename: req.file.filename,
+            originalname: req.file.originalname,
+            mimetype: req.file.mimetype,
+            size: req.file.size,
+            path: req.file.path,
+          }
+        : null,
+    });
+
     if (!req.file) {
+      console.error("No file received in upload request");
       return res.status(400).json({ error: "NO_FILE" });
     }
 
-    const relPath = ["products", req.file.filename].join("/");
-    const url = `/uploads/${relPath}`;
+    try {
+      const relPath = ["products", req.file.filename].join("/");
+      const url = `/uploads/${relPath}`;
 
-    const product = await this.productService.updateImage(productId, relPath);
+      console.log("Updating product image:", { productId, relPath, url });
 
-    return this.success(res, {
-      product: { ...product, imageUrl: url },
-      file: {
-        filename: req.file.filename,
-        mimetype: req.file.mimetype,
-        size: req.file.size,
-        url,
-      },
-    });
+      const product = await this.productService.updateImage(productId, relPath);
+
+      console.log("Product image updated successfully:", { productId, url });
+
+      return this.success(res, {
+        product: { ...product, imageUrl: url },
+        file: {
+          filename: req.file.filename,
+          mimetype: req.file.mimetype,
+          size: req.file.size,
+          url,
+        },
+      });
+    } catch (error) {
+      console.error("Error updating product image:", error);
+      throw error;
+    }
   }
 
   /**
