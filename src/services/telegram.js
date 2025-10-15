@@ -51,7 +51,7 @@ export async function sendTelegramMessage(chatId, text, options = {}) {
   const body = {
     chat_id: chatId,
     text,
-    parse_mode: options.parseMode || "HTML",
+    parse_mode: options.parseMode || options.parse_mode || "HTML",
   };
 
   if (options.threadId) {
@@ -99,7 +99,7 @@ export async function sendTelegramPhoto(
     const body = {
       chat_id: chatId,
       photo: photoPath,
-      parse_mode: options.parseMode || "HTML",
+      parse_mode: options.parseMode || options.parse_mode || "HTML",
     };
     if (caption) body.caption = caption;
     if (options.threadId) body.message_thread_id = options.threadId;

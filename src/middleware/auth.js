@@ -61,22 +61,39 @@ function resolveUserId(sub) {
 
 export async function requireAuth(req, res, next) {
   // JWT-based auth only (session removed)
+  console.log("[requireAuth] Called for:", req.path);
   try {
     const authz = req.headers["authorization"] || req.headers["Authorization"];
+    console.log(
+      "[requireAuth] Authorization header:",
+      authz ? "present" : "missing"
+    );
     if (!authz || !authz.toString().startsWith("Bearer ")) {
+      console.log("[requireAuth] No valid authorization header, returning 401");
       return res.status(401).json({ error: "UNAUTHORIZED" });
     }
     const token = authz.toString().slice(7);
+    console.log("[requireAuth] Token found, length:", token.length);
     const payload = jwt.verify(token, JWT_ACCESS_SECRET);
+    console.log("[requireAuth] Token verified, payload:", payload);
     const userId = resolveUserId(payload?.sub);
+    console.log("[requireAuth] Resolved userId:", userId);
     if (userId === null) return res.status(401).json({ error: "UNAUTHORIZED" });
     const prisma = req.app?.locals?.prisma;
     if (!prisma) return res.status(500).json({ error: "PRISMA_NOT_AVAILABLE" });
     const user = await prisma.user.findUnique({ where: { id: userId } });
+    console.log(
+      "[requireAuth] User found:",
+      user ? `ID: ${user.id}, email: ${user.email}` : "null"
+    );
     if (!user) return res.status(401).json({ error: "UNAUTHORIZED" });
-    
+
     // Устанавливаем req.user вместо req.session.user
     req.user = publicUser(user);
+    console.log(
+      "[requireAuth] req.user set:",
+      req.user ? `ID: ${req.user.id}` : "null"
+    );
     return next();
   } catch {
     return res.status(401).json({ error: "UNAUTHORIZED" });
