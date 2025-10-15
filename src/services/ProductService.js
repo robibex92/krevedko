@@ -437,15 +437,13 @@ export class ProductService {
    * Removes from all Telegram chats and database
    */
   async deleteProduct(productId) {
-    // 1. Удаляем из всех Telegram чатов
-    await this.telegramBotService.enqueueMessage("product_remove", {
-      productId: productId,
-    });
+    // 1. Удаляем из всех Telegram чатов напрямую
+    const { markProductAsRemoved } = await import("./telegram-bot.js");
+    await markProductAsRemoved(this.prisma, productId);
 
-    // 2. Удаляем из чата быстрых продаж
-    await this.telegramBotService.enqueueMessage("quick_pickup_remove", {
-      productId: productId,
-    });
+    // 2. Удаляем из чата быстрых продаж напрямую
+    const { removeProductFromQuickPickup } = await import("./telegram-bot.js");
+    await removeProductFromQuickPickup(this.prisma, productId);
 
     // 3. Удаляем из базы данных
     const deletedProduct = await this.productRepo.delete(productId);
