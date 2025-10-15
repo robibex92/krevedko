@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { asyncHandler } from "../../../core/middleware/asyncHandler.js";
 import { requireAuth, requireAdmin } from "../../../middleware/auth.js";
-import { productUpload } from "../../../services/uploads.js";
+import { productUploadBase } from "../../../services/uploads.js";
 
 export function createAdminProductRoutes(container) {
   const router = Router();

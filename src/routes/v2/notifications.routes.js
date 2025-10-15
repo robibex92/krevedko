@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { asyncHandler } from "../../core/middleware/asyncHandler.js";
 import { requireAuth, requireAdmin } from "../../middleware/auth.js";
-import { notificationUpload } from "../../services/uploads.js";
+import { notificationUploadBase } from "../../services/uploads.js";
 
 /**
  * Create notification routes

@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { asyncHandler } from "../../../core/middleware/asyncHandler.js";
 import { requireAuth, requireAdmin } from "../../../middleware/auth.js";
-import { paymentUpload } from "../../../services/uploads.js";
+import { paymentUploadBase } from "../../../services/uploads.js";
 
 export function createAdminOrderRoutes(container) {
   const router = Router();

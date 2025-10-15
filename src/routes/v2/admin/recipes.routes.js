@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { asyncHandler } from "../../../core/middleware/asyncHandler.js";
 import { requireAuth, requireAdmin } from "../../../middleware/auth.js";
-import { recipesUpload } from "../../../services/uploads.js";
+import { recipesUploadBase } from "../../../services/uploads.js";
 
 /**
  * Create admin recipe routes

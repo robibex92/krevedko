@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { asyncHandler } from "../../core/middleware/asyncHandler.js";
 import { requireAuth } from "../../middleware/auth.js";
-import { reviewUpload } from "../../services/uploads.js";
+import { reviewUploadBase } from "../../services/uploads.js";
 
 /**
  * Create review routes
