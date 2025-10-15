@@ -257,10 +257,12 @@ export function buildQuickPickupMessage(product) {
 export function buildReviewMessage(review, user) {
   const lines = [];
 
-  // Показываем только звезды без "Новый отзыв"
-  const stars = "⭐".repeat(review.rating);
-  lines.push(stars);
-  lines.push("");
+  // Показываем звезды только если отзыв НЕ от администратора
+  if (user.role !== "ADMIN") {
+    const stars = "⭐".repeat(review.rating);
+    lines.push(stars);
+    lines.push("");
+  }
 
   // Заголовок сразу под звездами
   if (review.title) {
