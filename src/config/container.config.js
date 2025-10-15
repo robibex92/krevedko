@@ -204,7 +204,8 @@ export function configureContainer(prisma) {
         c.resolve("cartRepository"),
         c.resolve("favoriteRepository"),
         c.resolve("orderRepository"),
-        c.resolve("mailerService")
+        c.resolve("mailerService"),
+        c.resolve("guestCartService")
       )
   );
 

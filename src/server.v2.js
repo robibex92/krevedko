@@ -40,7 +40,7 @@ import { configureMailRuStrategy } from "./auth/strategies/mailru.strategy.js";
 // import adminRouter from "./routes/admin.js"; // MIGRATED to v2
 import { csrfIssue, csrfProtect } from "./middleware/csrf.js";
 import { requireAuth, requireAdmin } from "./middleware/auth.js";
-import { productUpload } from "./services/uploads.js";
+import { productUploadBase } from "./services/uploads.js";
 import { processMessageQueue } from "./services/telegram-bot.js";
 
 // Security middlewares
@@ -48,6 +48,9 @@ import {
   idempotencyMiddleware,
   cleanupExpiredIdempotencyKeys,
 } from "./middleware/idempotency.js";
+
+// Redis service
+import redisService from "./services/redis.service.js";
 import { rateLimiters } from "./middleware/rateLimit.js";
 import { sanitizeInput } from "./middleware/inputSanitization.js";
 import { securityLogger } from "./middleware/securityLogger.js";
@@ -199,13 +202,14 @@ app.get("/api/admin/ping", requireAuth, requireAdmin, (_req, res) =>
 );
 
 // Test upload endpoint
-app.post("/api/test-upload", productUpload.single("image"), (req, res) => {
+app.post("/api/test-upload", productUploadBase.single("image"), (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ error: "NO_FILE" });
     const relPath = ["products", req.file.filename].join("/");
     res.json({
       ok: true,
       file: { ...req.file, relPath, url: `/uploads/${relPath}` },
+      message: "Image uploaded with watermark 'Ля Креведко'",
     });
   } catch (e) {
     res.status(500).json({ error: "TEST_UPLOAD_FAILED", message: e?.message });
@@ -254,6 +258,15 @@ if (process.env.TELEGRAM_BOT_TOKEN) {
   );
 }
 
+// Initialize Redis (с задержкой после подключения к БД)
+setTimeout(async () => {
+  try {
+    await redisService.connect();
+  } catch (error) {
+    console.error("[redis] Failed to initialize:", error);
+  }
+}, 5000);
+
 // Periodic cleanup of expired idempotency keys (каждые 6 часов)
 let cleanupInterval = null;
 console.log("[security] Idempotency keys cleanup enabled");
@@ -286,6 +299,7 @@ async function shutdown(signal) {
       clearInterval(cleanupInterval);
       console.log("[security] Cleanup processor stopped");
     }
+    await redisService.disconnect();
     await prisma.$disconnect();
     server.close(() => {
       console.log("[server] HTTP server closed");

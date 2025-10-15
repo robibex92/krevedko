@@ -3,6 +3,10 @@ import { fileURLToPath } from "url";
 import fs from "fs";
 import multer from "multer";
 import crypto from "crypto";
+import {
+  processImageWithWatermark,
+  shouldAddWatermark,
+} from "../utils/watermark.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -92,7 +96,8 @@ function makeMulterStorage(dir) {
 // --- фабрика загрузчика изображений ---
 function makeImageUpload({ dir, maxFiles = 1, fileSizeMb = 5 }) {
   const envLimit = Number(process.env.UPLOAD_LIMIT_MB);
-  const effectiveMb = Number.isFinite(envLimit) && envLimit > 0 ? envLimit : Number(fileSizeMb);
+  const effectiveMb =
+    Number.isFinite(envLimit) && envLimit > 0 ? envLimit : Number(fileSizeMb);
   const uploadLimitBytes = Math.max(1, Number(effectiveMb)) * 1024 * 1024;
 
   return multer({
@@ -102,7 +107,11 @@ function makeImageUpload({ dir, maxFiles = 1, fileSizeMb = 5 }) {
       if (imageMimes.has(file.mimetype)) {
         cb(null, true);
       } else {
-        console.warn("[upload] rejected file:", file.originalname, file.mimetype);
+        console.warn(
+          "[upload] rejected file:",
+          file.originalname,
+          file.mimetype
+        );
         cb(new Error("INVALID_FILE_TYPE"));
       }
     },
@@ -111,7 +120,8 @@ function makeImageUpload({ dir, maxFiles = 1, fileSizeMb = 5 }) {
 
 function makeMediaUpload({ dir, maxFiles = 1, fileSizeMb = 50 }) {
   const envLimit = Number(process.env.UPLOAD_LIMIT_MB);
-  const effectiveMb = Number.isFinite(envLimit) && envLimit > 0 ? envLimit : Number(fileSizeMb);
+  const effectiveMb =
+    Number.isFinite(envLimit) && envLimit > 0 ? envLimit : Number(fileSizeMb);
   const uploadLimitBytes = Math.max(1, Number(effectiveMb)) * 1024 * 1024;
   const allowed = new Set([...imageMimes, ...videoMimes]);
 
@@ -122,20 +132,88 @@ function makeMediaUpload({ dir, maxFiles = 1, fileSizeMb = 50 }) {
       if (allowed.has(file.mimetype)) {
         cb(null, true);
       } else {
-        console.warn("[upload] rejected file:", file.originalname, file.mimetype);
+        console.warn(
+          "[upload] rejected file:",
+          file.originalname,
+          file.mimetype
+        );
         cb(new Error("INVALID_FILE_TYPE"));
       }
     },
   });
 }
 
+// --- middleware для обработки изображений с водяным знаком ---
+function watermarkMiddleware(uploadMiddleware) {
+  return (req, res, next) => {
+    uploadMiddleware(req, res, async (err) => {
+      if (err) {
+        return next(err);
+      }
+
+      try {
+        // Обрабатываем загруженные файлы
+        if (req.file) {
+          // Одиночный файл
+          if (shouldAddWatermark(req.file.path)) {
+            await processImageWithWatermark(req.file.path, req.file.path, {
+              text: "Ля Креведко",
+              opacity: 0.3,
+              color: "#ffffff",
+              rotation: -15,
+              position: "center",
+            });
+          }
+        } else if (req.files && req.files.length > 0) {
+          // Множественные файлы
+          for (const file of req.files) {
+            if (shouldAddWatermark(file.path)) {
+              await processImageWithWatermark(file.path, file.path, {
+                text: "Ля Креведко",
+                opacity: 0.3,
+                color: "#ffffff",
+                rotation: -15,
+                position: "center",
+              });
+            }
+          }
+        }
+
+        next();
+      } catch (watermarkError) {
+        console.error("Error adding watermark:", watermarkError);
+        // Не прерываем процесс загрузки, если водяной знак не удалось добавить
+        next();
+      }
+    });
+  };
+}
+
 // --- экспорт готовых загрузчиков ---
-export const productUpload = makeImageUpload({ dir: uploadProductsDir });
-export const paymentUpload = makeImageUpload({ dir: uploadPaymentsDir });
-export const avatarUpload = makeImageUpload({ dir: uploadAvatarsDir });
-export const reviewUpload = makeImageUpload({ dir: uploadReviewsDir, maxFiles: 5 });
-export const recipesUpload = makeMediaUpload({ dir: uploadRecipesDir, maxFiles: 10, fileSizeMb: 200 });
-export const notificationUpload = makeImageUpload({ dir: uploadNotificationsDir, maxFiles: 3, fileSizeMb: 8 });
+export const productUpload = watermarkMiddleware(
+  makeImageUpload({ dir: uploadProductsDir })
+);
+export const paymentUpload = watermarkMiddleware(
+  makeImageUpload({ dir: uploadPaymentsDir })
+);
+export const avatarUpload = makeImageUpload({ dir: uploadAvatarsDir }); // Без водяного знака
+export const reviewUpload = watermarkMiddleware(
+  makeImageUpload({ dir: uploadReviewsDir, maxFiles: 5 })
+);
+export const recipesUpload = watermarkMiddleware(
+  makeMediaUpload({ dir: uploadRecipesDir, maxFiles: 10, fileSizeMb: 200 })
+);
+export const notificationUpload = watermarkMiddleware(
+  makeImageUpload({ dir: uploadNotificationsDir, maxFiles: 3, fileSizeMb: 8 })
+);
+
+// --- экспорт базовых загрузчиков без водяного знака (для совместимости) ---
+export const productUploadBase = makeImageUpload({ dir: uploadProductsDir });
+export const paymentUploadBase = makeImageUpload({ dir: uploadPaymentsDir });
+export const avatarUploadBase = makeImageUpload({ dir: uploadAvatarsDir });
+export const reviewUploadBase = makeImageUpload({ dir: uploadReviewsDir, maxFiles: 5 });
+export const recipesUploadBase = makeMediaUpload({ dir: uploadRecipesDir, maxFiles: 10, fileSizeMb: 200 });
+export const notificationUploadBase = makeImageUpload({ dir: uploadNotificationsDir, maxFiles: 3, fileSizeMb: 8 });
 
 // --- тестовый роут для проверки ---
 // пример использования (добавь в сервер):

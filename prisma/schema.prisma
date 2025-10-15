@@ -112,9 +112,23 @@ model Product {
   comments               Comment[]
   telegramMessages       ProductTelegramMessage[]
   inStockTelegramMessage InStockTelegramMessage?
+  images                 ProductImage[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+model ProductImage {
+  id        Int      @id @default(autoincrement())
+  productId Int
+  imagePath String
+  order     Int      @default(0) // Порядок отображения
+  isMain    Boolean  @default(false) // Главное изображение
+  createdAt DateTime @default(now())
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@index([productId, order])
 }
 
 model CollectionProduct {

@@ -28,10 +28,22 @@ export class AuthController extends BaseController {
     // Get referral from cookie instead of session
     const referredBy = req.cookies?.referralCode || null;
 
+    // Get guest session ID for migration
+    const guestSessionId = req.body?.guestSessionId || null;
+
     const result = await this.authService.register({
       ...validatedData,
       referredBy,
     });
+
+    // Migrate guest data if sessionId provided
+    let migrationResult = { cartMigrated: 0, ordersMigrated: 0 };
+    if (guestSessionId) {
+      migrationResult = await this.authService.migrateGuestDataToUser(
+        guestSessionId,
+        result.user.id
+      );
+    }
 
     // Clear referral cookie
     if (req.cookies?.referralCode) {
@@ -47,6 +59,7 @@ export class AuthController extends BaseController {
     this.created(res, {
       user: userDTO,
       accessToken: result.accessToken,
+      migration: migrationResult,
     });
   };
 
@@ -58,7 +71,19 @@ export class AuthController extends BaseController {
     // Validation
     const { email, password } = validateLogin(req.body || {});
 
+    // Get guest session ID for migration
+    const guestSessionId = req.body?.guestSessionId || null;
+
     const result = await this.authService.login(email, password, req.ip);
+
+    // Migrate guest data if sessionId provided
+    let migrationResult = { cartMigrated: 0, ordersMigrated: 0 };
+    if (guestSessionId) {
+      migrationResult = await this.authService.migrateGuestDataToUser(
+        guestSessionId,
+        result.user.id
+      );
+    }
 
     // Set refresh token cookie
     this.setRefreshCookie(res, result.refreshToken);
@@ -66,6 +91,7 @@ export class AuthController extends BaseController {
     this.success(res, {
       user: result.user,
       accessToken: result.accessToken,
+      migration: migrationResult,
     });
   };
 

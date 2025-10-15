@@ -1,9 +1,9 @@
 import { Router } from "express";
 import { requireAuth, requireAdmin } from "../middleware/auth.js";
 import {
-  productUpload,
-  paymentUpload,
-  recipesUpload,
+  productUploadBase,
+  paymentUploadBase,
+  recipesUploadBase,
 } from "../services/uploads.js";
 import { clearCache } from "../services/cache.js";
 import { makeOrderNumber } from "../services/pricing.js";
@@ -236,7 +236,7 @@ router.post(
   "/admin/recipes/upload",
   requireAuth,
   requireAdmin,
-  recipesUpload.array("media", 10),
+  recipesUploadBase.array("media", 10),
   async (req, res) => {
     try {
       if (!req.files || !req.files.length) {
@@ -689,7 +689,7 @@ router.post(
   "/admin/products/:id/image",
   requireAuth,
   requireAdmin,
-  productUpload.single("image"),
+  productUploadBase.single("image"),
   async (req, res) => {
     const prisma = req.app.locals.prisma;
     try {
@@ -966,7 +966,7 @@ router.post(
   "/admin/orders/:id/payment-proof",
   requireAuth,
   requireAdmin,
-  paymentUpload.single("image"),
+  paymentUploadBase.single("image"),
   async (req, res) => {
     const prisma = req.app.locals.prisma;
     try {

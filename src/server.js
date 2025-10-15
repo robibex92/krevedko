@@ -23,7 +23,7 @@ import favoritesRouter from "./routes/favorites.js";
 import profileRouter from "./routes/profile.js";
 import publicReviewsRouter from "./routes/public-reviews.js";
 import productFeedbackRouter from "./routes/product-feedback.js";
-import { productUpload } from "./services/uploads.js";
+import { productUploadBase } from "./services/uploads.js";
 import referralRouter from "./routes/referral.js";
 import adminRouter from "./routes/admin.js";
 import notificationsRouter from "./routes/notifications.js";
@@ -142,7 +142,7 @@ app.get("/api/admin/ping", requireAuth, requireAdmin, (_req, res) =>
 );
 
 // Test upload endpoint to validate file uploads independently of admin flows
-app.post("/api/test-upload", productUpload.single("image"), (req, res) => {
+app.post("/api/test-upload", productUploadBase.single("image"), (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ error: "NO_FILE" });
     console.log("[test-upload] file received", {

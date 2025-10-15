@@ -26,7 +26,7 @@ export function createOrderRoutes(container) {
   router.post(
     "/orders/:id/payment-proof",
     requireAuth,
-    paymentUpload.single("image"),
+    paymentUploadBase.single("image"),
     asyncHandler(orderController.uploadPaymentProof)
   );
   router.post(

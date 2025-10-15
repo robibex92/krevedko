@@ -17,7 +17,7 @@ export function createReviewRoutes(container) {
   router.post(
     "/public/reviews",
     requireAuth,
-    reviewUpload.array("images", 5),
+    reviewUploadBase.array("images", 5),
     asyncHandler(reviewController.createReview)
   );
 

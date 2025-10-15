@@ -17,6 +17,55 @@ function formatPrice(kopecks) {
   return `${rubles} ₽`;
 }
 
+/**
+ * Получение эмодзи для категории товара
+ */
+function getCategoryEmoji(category) {
+  if (!category) return "🛍️";
+
+  const categoryEmojis = {
+    овощи: "🥕",
+    фрукты: "🍎",
+    мясо: "🥩",
+    рыба: "🐟",
+    молочные: "🥛",
+    хлеб: "🍞",
+    крупы: "🌾",
+    масла: "🫒",
+    специи: "🌶️",
+    напитки: "🥤",
+    сладости: "🍬",
+    заморозка: "🧊",
+    консервы: "🥫",
+    детское: "👶",
+    здоровое: "🥗",
+    веганское: "🌱",
+    "без глютена": "🌾",
+    органическое: "🌿",
+    местное: "🏠",
+    сезонное: "🍂",
+    премиум: "💎",
+    акция: "🔥",
+    новинка: "✨",
+  };
+
+  const lowerCategory = category.toLowerCase();
+
+  // Ищем точное совпадение
+  if (categoryEmojis[lowerCategory]) {
+    return categoryEmojis[lowerCategory];
+  }
+
+  // Ищем частичное совпадение
+  for (const [key, emoji] of Object.entries(categoryEmojis)) {
+    if (lowerCategory.includes(key) || key.includes(lowerCategory)) {
+      return emoji;
+    }
+  }
+
+  return "🛍️"; // Дефолтный эмодзи
+}
+
 function resolveProductImageSource(imagePath) {
   if (!imagePath) return { url: null, filePath: null };
   if (/^https?:\/\//i.test(imagePath)) {
@@ -46,25 +95,22 @@ function resolveProductImageSource(imagePath) {
 export function buildProductMessage(product) {
   const lines = [];
 
-  lines.push(`<b>${product.title}</b>`);
+  // Заголовок товара
+  lines.push(`🏷️<b>${product.title}</b>`);
 
+  // Описание товара (только если есть)
   if (product.description) {
     lines.push("");
-    lines.push(product.description);
+    lines.push(`📝${product.description}`);
   }
 
   lines.push("");
+  lines.push("━━━━━━━━━━━━━━━━━━━━");
+
+  // Цена
   lines.push(
     `💰 Цена: <b>${formatPrice(product.priceKopecks)}</b> за ${product.unitLabel}`
   );
-
-  if (product.stockQuantity && parseFloat(product.stockQuantity) > 0) {
-    lines.push(`📦 В наличии: ${product.stockQuantity} ${product.unitLabel}`);
-  }
-
-  if (product.canPickupNow) {
-    lines.push(`✅ Можно забрать сегодня`);
-  }
 
   return lines.join("\n");
 }
@@ -73,9 +119,105 @@ export function buildProductMessage(product) {
  * Создание текста сообщения для снятого с продажи товара
  */
 export function buildProductRemovedMessage(originalText) {
-  const lines = originalText.split("\n").map((line) => `<s>${line}</s>`);
+  const lines = originalText.split("\n").map((line) => {
+    // Не зачеркиваем разделитель
+    if (line === "━━━━━━━━━━━━━━━━━━━━") {
+      return line;
+    }
+    return `<s>${line}</s>`;
+  });
   lines.push("");
-  lines.push("<b>⛔️ СНЯТО С ПРОДАЖИ</b>");
+  lines.push("⛔️ <b>СНЯТО С ПРОДАЖИ</b>");
+  return lines.join("\n");
+}
+
+/**
+ * Создание текста сообщения для товара со скидкой
+ */
+export function buildDiscountedProductMessage(
+  product,
+  discountPercent,
+  originalPrice
+) {
+  const lines = [];
+
+  // Заголовок с акцентом на скидку
+  lines.push(`🔥 <b>СКИДКА ${discountPercent}%!</b> 🔥`);
+  lines.push("");
+
+  // Заголовок товара с эмодзи категории
+  const categoryEmoji = getCategoryEmoji(product.category);
+  lines.push(`${categoryEmoji} <b>${product.title}</b>`);
+
+  // Категория товара
+  if (product.category) {
+    lines.push(`🏷️ <i>${product.category}</i>`);
+  }
+
+  // Описание товара
+  if (product.description) {
+    lines.push("");
+    lines.push(`📝 ${product.description}`);
+  }
+
+  // Теги товара
+  if (product.tags) {
+    try {
+      const tags = JSON.parse(product.tags);
+      if (Array.isArray(tags) && tags.length > 0) {
+        lines.push("");
+        lines.push(`🏷️ <i>${tags.join(" • ")}</i>`);
+      }
+    } catch (e) {
+      // Игнорируем ошибки парсинга тегов
+    }
+  }
+
+  lines.push("");
+  lines.push("━━━━━━━━━━━━━━━━━━━━");
+
+  // Цены со скидкой
+  lines.push(
+    `💰 <b>${formatPrice(product.priceKopecks)}</b> за ${product.unitLabel}`
+  );
+  lines.push(`💸 <s>Было: ${formatPrice(originalPrice)}</s>`);
+  lines.push(
+    `🎉 <b>Экономия: ${formatPrice(originalPrice - product.priceKopecks)}</b>`
+  );
+
+  // Информация о наличии
+  if (product.stockQuantity && parseFloat(product.stockQuantity) > 0) {
+    const stockQty = parseFloat(product.stockQuantity);
+    const stockEmoji = stockQty > 10 ? "📦" : stockQty > 5 ? "📦" : "⚠️";
+    lines.push(
+      `${stockEmoji} В наличии: <b>${product.stockQuantity} ${product.unitLabel}</b>`
+    );
+
+    // Предупреждение о малом количестве
+    if (stockQty <= 5) {
+      lines.push(`🔥 <i>Осталось мало! Успейте заказать</i>`);
+    }
+  } else {
+    lines.push(`❌ Нет в наличии`);
+  }
+
+  // Возможность забрать сегодня
+  if (product.canPickupNow) {
+    lines.push(`⚡ <b>Можно забрать сегодня!</b>`);
+  }
+
+  // Минимальный заказ
+  if (product.stepDecimal && parseFloat(product.stepDecimal) > 0) {
+    lines.push(`📏 Мин. заказ: ${product.stepDecimal} ${product.unitLabel}`);
+  }
+
+  lines.push("━━━━━━━━━━━━━━━━━━━━");
+
+  // Призыв к действию
+  lines.push(`🛒 <b>Заказать со скидкой!</b>`);
+  lines.push(`⏰ <i>Предложение ограничено по времени</i>`);
+  lines.push(`💬 <i>Напишите в личные сообщения для заказа</i>`);
+
   return lines.join("\n");
 }
 
@@ -85,15 +227,25 @@ export function buildProductRemovedMessage(originalText) {
 export function buildQuickPickupMessage(product) {
   const lines = [];
 
-  lines.push(`<b>⚡ МОЖНО ЗАБРАТЬ СЕЙЧАС!</b>`);
-  lines.push("");
-  lines.push(`<b>${product.title}</b>`);
-  lines.push(`💰 ${formatPrice(product.priceKopecks)} за ${product.unitLabel}`);
+  // Заголовок товара
+  lines.push(`🏷️<b>${product.title}</b>`);
 
+  // Описание товара (только если есть)
   if (product.description) {
     lines.push("");
-    lines.push(product.description);
+    lines.push(`📝${product.description}`);
   }
+
+  lines.push("");
+  lines.push("━━━━━━━━━━━━━━━━━━━━");
+
+  // Цена
+  lines.push(
+    `💰 Цена: <b>${formatPrice(product.priceKopecks)}</b> за ${product.unitLabel}`
+  );
+
+  // Возможность забрать сегодня
+  lines.push(`⚡ <b>Можно забрать сегодня!</b>`);
 
   return lines.join("\n");
 }
@@ -128,19 +280,205 @@ export function buildReviewMessage(review, user) {
 export function buildRecipeMessage(recipe) {
   const lines = [];
 
-  lines.push(`<b>🍳 Новый рецепт!</b>`);
+  lines.push(`🍳 <b>НОВЫЙ РЕЦЕПТ!</b> 🍳`);
   lines.push("");
   lines.push(`<b>${recipe.title}</b>`);
 
   if (recipe.excerpt) {
     lines.push("");
-    lines.push(recipe.excerpt);
+    lines.push(`📝 ${recipe.excerpt}`);
   }
 
-  // Предполагаем, что URL будет в формате https://your-domain.com/recipes/slug
-  const recipeUrl = `${process.env.FRONTEND_URL || ""}/recipes/${recipe.slug}`;
+  // Время приготовления и сложность
+  if (recipe.cookingTime) {
+    lines.push("");
+    lines.push(`⏱️ Время приготовления: ${recipe.cookingTime}`);
+  }
+
+  if (recipe.difficulty) {
+    const difficultyEmojis = {
+      easy: "🟢 Легко",
+      medium: "🟡 Средне",
+      hard: "🔴 Сложно",
+    };
+    lines.push(
+      `🎯 Сложность: ${difficultyEmojis[recipe.difficulty] || recipe.difficulty}`
+    );
+  }
+
   lines.push("");
-  lines.push(`<a href="${recipeUrl}">Читать рецепт →</a>`);
+  lines.push("━━━━━━━━━━━━━━━━━━━━");
+
+  // Ссылка на рецепт
+  const recipeUrl = `${process.env.FRONTEND_URL || ""}/recipes/${recipe.slug}`;
+  lines.push(`📖 <a href="${recipeUrl}"><b>Читать полный рецепт →</b></a>`);
+  lines.push(`💬 <i>Делитесь результатами в комментариях!</i>`);
+
+  return lines.join("\n");
+}
+
+/**
+ * Создание текста сообщения для новинки
+ */
+export function buildNewProductMessage(product) {
+  const lines = [];
+
+  // Заголовок с акцентом на новинку
+  lines.push(`✨ <b>НОВИНКА!</b> ✨`);
+  lines.push("");
+
+  // Заголовок товара с эмодзи категории
+  const categoryEmoji = getCategoryEmoji(product.category);
+  lines.push(`${categoryEmoji} <b>${product.title}</b>`);
+
+  // Категория товара
+  if (product.category) {
+    lines.push(`🏷️ <i>${product.category}</i>`);
+  }
+
+  // Описание товара
+  if (product.description) {
+    lines.push("");
+    lines.push(`📝 ${product.description}`);
+  }
+
+  // Теги товара
+  if (product.tags) {
+    try {
+      const tags = JSON.parse(product.tags);
+      if (Array.isArray(tags) && tags.length > 0) {
+        lines.push("");
+        lines.push(`🏷️ <i>${tags.join(" • ")}</i>`);
+      }
+    } catch (e) {
+      // Игнорируем ошибки парсинга тегов
+    }
+  }
+
+  lines.push("");
+  lines.push("━━━━━━━━━━━━━━━━━━━━");
+
+  // Цена с акцентом
+  lines.push(
+    `💰 <b>${formatPrice(product.priceKopecks)}</b> за ${product.unitLabel}`
+  );
+
+  // Информация о наличии
+  if (product.stockQuantity && parseFloat(product.stockQuantity) > 0) {
+    const stockQty = parseFloat(product.stockQuantity);
+    const stockEmoji = stockQty > 10 ? "📦" : stockQty > 5 ? "📦" : "⚠️";
+    lines.push(
+      `${stockEmoji} В наличии: <b>${product.stockQuantity} ${product.unitLabel}</b>`
+    );
+  } else {
+    lines.push(`❌ Нет в наличии`);
+  }
+
+  // Возможность забрать сегодня
+  if (product.canPickupNow) {
+    lines.push(`⚡ <b>Можно забрать сегодня!</b>`);
+  }
+
+  // Минимальный заказ
+  if (product.stepDecimal && parseFloat(product.stepDecimal) > 0) {
+    lines.push(`📏 Мин. заказ: ${product.stepDecimal} ${product.unitLabel}`);
+  }
+
+  lines.push("");
+  lines.push("━━━━━━━━━━━━━━━━━━━━");
+
+  // Призыв к действию
+  lines.push(`🛒 <b>Попробовать новинку!</b>`);
+  lines.push(`💬 <i>Напишите в личные сообщения для заказа</i>`);
+  lines.push(`⭐ <i>Оставьте отзыв после покупки</i>`);
+
+  return lines.join("\n");
+}
+
+/**
+ * Автоматический выбор подходящего шаблона сообщения для товара
+ */
+export function buildSmartProductMessage(product, options = {}) {
+  const {
+    isNew = false,
+    isDiscounted = false,
+    discountPercent = 0,
+    originalPrice = null,
+    isQuickPickup = false,
+  } = options;
+
+  // Приоритет: быстрая продажа > скидка > новинка > обычный товар
+  if (isQuickPickup || product.canPickupNow) {
+    return buildQuickPickupMessage(product);
+  }
+
+  if (isDiscounted && discountPercent > 0 && originalPrice) {
+    return buildDiscountedProductMessage(
+      product,
+      discountPercent,
+      originalPrice
+    );
+  }
+
+  if (isNew) {
+    return buildNewProductMessage(product);
+  }
+
+  return buildProductMessage(product);
+}
+
+/**
+ * Создание сообщения о распродаже/акции
+ */
+export function buildSaleMessage(
+  products,
+  saleTitle,
+  saleDescription,
+  endDate
+) {
+  const lines = [];
+
+  lines.push(`🔥 <b>${saleTitle}</b> 🔥`);
+  lines.push("");
+
+  if (saleDescription) {
+    lines.push(`📝 ${saleDescription}`);
+    lines.push("");
+  }
+
+  lines.push("━━━━━━━━━━━━━━━━━━━━");
+  lines.push("<b>🎯 Товары по акции:</b>");
+  lines.push("");
+
+  products.forEach((product, index) => {
+    const categoryEmoji = getCategoryEmoji(product.category);
+    lines.push(`${index + 1}. ${categoryEmoji} <b>${product.title}</b>`);
+    lines.push(
+      `   💰 ${formatPrice(product.priceKopecks)} за ${product.unitLabel}`
+    );
+
+    if (product.stockQuantity && parseFloat(product.stockQuantity) > 0) {
+      lines.push(
+        `   📦 В наличии: ${product.stockQuantity} ${product.unitLabel}`
+      );
+    }
+    lines.push("");
+  });
+
+  lines.push("━━━━━━━━━━━━━━━━━━━━");
+
+  if (endDate) {
+    const endDateStr = new Date(endDate).toLocaleDateString("ru-RU", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+    });
+    lines.push(`⏰ <b>Акция действует до: ${endDateStr}</b>`);
+    lines.push("");
+  }
+
+  lines.push(`🛒 <b>Заказать товары по акции!</b>`);
+  lines.push(`💬 <i>Напишите в личные сообщения</i>`);
 
   return lines.join("\n");
 }

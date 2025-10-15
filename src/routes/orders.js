@@ -4,7 +4,7 @@ import { dec, isMultipleOf } from "../utils/decimal.js";
 import { getActiveCollections, resolveCollectionSelection } from "../services/collections.js";
 import { resolvePricingStep, makeOrderNumber } from "../services/pricing.js";
 import { requireAuth } from "../middleware/auth.js";
-import { paymentUpload } from "../services/uploads.js";
+import { paymentUploadBase } from "../services/uploads.js";
 
 const router = Router();
 
@@ -162,7 +162,7 @@ router.get("/orders/:id", requireAuth, async (req, res) => {
 });
 
 // POST /api/orders/:id/payment-proof
-router.post("/orders/:id/payment-proof", requireAuth, paymentUpload.single("image"), async (req, res) => {
+router.post("/orders/:id/payment-proof", requireAuth, paymentUploadBase.single("image"), async (req, res) => {
   const prisma = req.app.locals.prisma;
   try {
     const id = Number(req.params.id);

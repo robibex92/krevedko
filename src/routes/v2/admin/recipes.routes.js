@@ -31,7 +31,7 @@ export function createAdminRecipeRoutes(container) {
   // Upload media
   router.post(
     "/recipes/upload",
-    recipesUpload.array("media", 10),
+    recipesUploadBase.array("media", 10),
     asyncHandler(recipeController.uploadMedia)
   );
 

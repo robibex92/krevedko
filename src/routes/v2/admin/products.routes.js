@@ -19,7 +19,7 @@ export function createAdminProductRoutes(container) {
   );
   router.post(
     "/products/:id/image",
-    productUpload.single("image"),
+    productUploadBase.single("image"),
     asyncHandler(productController.uploadImage)
   );
   router.get(

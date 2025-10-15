@@ -19,7 +19,8 @@ export class AuthService {
     cartRepository,
     favoriteRepository,
     orderRepository,
-    mailerService
+    mailerService,
+    guestCartService
   ) {
     this.userRepo = userRepository;
     this.refreshTokenRepo = refreshTokenRepository;
@@ -27,6 +28,7 @@ export class AuthService {
     this.favoriteRepo = favoriteRepository;
     this.orderRepo = orderRepository;
     this.mailerService = mailerService;
+    this.guestCartService = guestCartService;
 
     // JWT configuration
     this.JWT_ACCESS_SECRET =
@@ -141,6 +143,38 @@ export class AuthService {
     }
 
     return { ok: true };
+  }
+
+  /**
+   * Migrate guest data to user (cart and orders)
+   */
+  async migrateGuestDataToUser(sessionId, userId) {
+    if (!sessionId || !userId) {
+      return { cartMigrated: 0, ordersMigrated: 0 };
+    }
+
+    try {
+      // Migrate guest cart
+      const cartResult = await this.guestCartService.mergeGuestCartIntoUserCart(
+        sessionId,
+        userId
+      );
+
+      // Migrate guest orders
+      const ordersResult = await this.orderRepo.migrateGuestOrdersToUser(
+        sessionId,
+        userId
+      );
+
+      return {
+        cartMigrated: cartResult?.merged || 0,
+        ordersMigrated: ordersResult?.migrated || 0,
+      };
+    } catch (error) {
+      console.error("[AuthService] Error migrating guest data:", error);
+      // Не бросаем ошибку - даже если merge не удался, пользователь должен войти
+      return { cartMigrated: 0, ordersMigrated: 0 };
+    }
   }
 
   /**

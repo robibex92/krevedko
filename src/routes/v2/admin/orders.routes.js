@@ -21,7 +21,7 @@ export function createAdminOrderRoutes(container) {
   );
   router.post(
     "/orders/:id/payment-proof",
-    paymentUpload.single("image"),
+    paymentUploadBase.single("image"),
     async (req, res) => {
       const orderId = Number(req.params.id);
 

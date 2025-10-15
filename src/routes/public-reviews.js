@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { requireAuth } from "../middleware/auth.js";
-import { reviewUpload } from "../services/uploads.js";
+import { reviewUploadBase } from "../services/uploads.js";
 import { enqueueMessage } from "../services/telegram-bot.js";
 import path from "path";
 
@@ -43,7 +43,7 @@ router.get("/public/reviews", async (req, res) => {
 });
 
 // POST /api/public/reviews
-router.post("/public/reviews", requireAuth, reviewUpload.array("images", 5), async (req, res) => {
+router.post("/public/reviews", requireAuth, reviewUploadBase.array("images", 5), async (req, res) => {
   const prisma = req.app.locals.prisma;
   try {
     const { title, content, rating } = req.body || {};

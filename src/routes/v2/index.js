@@ -17,6 +17,7 @@ import { createAdminOrderRoutes } from "./admin/orders.routes.js";
 import { createAdminRecipeRoutes } from "./admin/recipes.routes.js";
 import { createAdminTelegramRoutes } from "./admin/telegram.routes.js";
 import { createAdminBroadcastRoutes } from "./admin/broadcast.routes.js";
+import { createWatermarkRoutes } from "./watermark.routes.js";
 import { createPublicRoutes } from "./public.routes.js";
 
 /**
@@ -51,6 +52,7 @@ export function createV2Routes(container) {
   router.use("/admin", createAdminRecipeRoutes(container));
   router.use("/admin", createAdminTelegramRoutes(container));
   router.use("/admin", createAdminBroadcastRoutes(container));
+  router.use(createWatermarkRoutes(container));
 
   return router;
 }

@@ -87,7 +87,7 @@ export function createNotificationRoutes(container) {
     "/admin/notifications/upload",
     requireAuth,
     requireAdmin,
-    notificationUpload.single("image"),
+    notificationUploadBase.single("image"),
     asyncHandler(notificationController.uploadImage)
   );
 

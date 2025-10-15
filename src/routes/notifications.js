@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { requireAuth, requireAdmin } from "../middleware/auth.js";
 import { bbcodeToHtml, bbcodeToText } from "../utils/bbcode.js";
-import { notificationUpload } from "../services/uploads.js";
+import { notificationUploadBase } from "../services/uploads.js";
 
 const router = Router();
 
@@ -760,7 +760,7 @@ router.post(
   "/admin/notifications/upload",
   requireAuth,
   requireAdmin,
-  notificationUpload.single("image"),
+  notificationUploadBase.single("image"),
   (req, res) => {
     try {
       if (!req.file) return res.status(400).json({ error: "NO_FILE" });
