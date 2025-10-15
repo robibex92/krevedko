@@ -182,7 +182,7 @@ export function idempotencyMiddleware(options = {}) {
 export async function cleanupExpiredIdempotencyKeys(prisma) {
   // Проверка что prisma передан и инициализирован
   if (!prisma || !prisma.idempotencyKey) {
-    console.warn("[idempotency] Cleanup skipped: Prisma not initialized");
+    console.log("[idempotency] Cleanup skipped: Prisma not initialized");
     return 0;
   }
 

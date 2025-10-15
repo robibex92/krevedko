@@ -3,20 +3,14 @@ import fs from "fs/promises";
 import path from "path";
 import { BusinessLogicError } from "../core/errors/AppError.js";
 
-// Проверка доступности File API (Node.js 20+)
-let FileAPI;
-try {
-  FileAPI = (await import("node:buffer")).File;
-} catch {
-  // Fallback для Node.js 18-19: создаем простую обертку
-  FileAPI = class File extends Blob {
-    constructor(bits, name, options = {}) {
-      super(bits, options);
-      this.name = name;
-      this.lastModified = Date.now();
-    }
-  };
-}
+// Создаем совместимую обертку для File API
+const FileAPI = class File extends Blob {
+  constructor(bits, name, options = {}) {
+    super(bits, options);
+    this.name = name;
+    this.lastModified = Date.now();
+  }
+};
 
 const { TELEGRAM_BOT_TOKEN } = process.env;
 
