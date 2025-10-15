@@ -145,8 +145,10 @@ function makeMediaUpload({ dir, maxFiles = 1, fileSizeMb = 50 }) {
 
 // --- middleware для обработки изображений с водяным знаком ---
 function watermarkMiddleware(uploadMiddleware) {
+  console.log("[WatermarkMiddleware] Creating watermark middleware wrapper");
   return (req, res, next) => {
     console.log("[WatermarkMiddleware] Middleware called for:", req.path);
+    console.log("[WatermarkMiddleware] About to call uploadMiddleware");
     uploadMiddleware(req, res, async (err) => {
       if (err) {
         console.log("[WatermarkMiddleware] Upload error:", err.message);
