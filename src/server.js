@@ -65,6 +65,28 @@ app.set("trust proxy", 1);
 app.use(morgan("dev"));
 app.use(compression());
 
+// Helmet security headers (ослабленные настройки для лучшего UX)
+app.use(
+  helmet({
+    contentSecurityPolicy: {
+      directives: {
+        defaultSrc: ["'self'"],
+        styleSrc: ["'self'", "'unsafe-inline'", "fonts.googleapis.com"],
+        fontSrc: ["'self'", "fonts.gstatic.com"],
+        imgSrc: ["'self'", "data:", "blob:", "https:"],
+        scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'"],
+        connectSrc: ["'self'", "https://api.telegram.org"],
+        frameSrc: ["'self'"],
+        objectSrc: ["'none'"],
+        upgradeInsecureRequests: [],
+      },
+    },
+    crossOriginEmbedderPolicy: false, // Отключаем для лучшей совместимости
+    crossOriginOpenerPolicy: false, // Отключаем для лучшей совместимости
+    crossOriginResourcePolicy: { policy: "cross-origin" }, // Разрешаем кросс-доменные ресурсы
+  })
+);
+
 // Middleware
 app.use(express.json({ limit: "50mb" }));
 app.use(

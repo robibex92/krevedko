@@ -60,8 +60,28 @@ export async function addWatermarkToImage(inputPath, outputPath, options = {}) {
       position = "center", // center, top-left, top-right, bottom-left, bottom-right
     } = options;
 
+    // Проверяем, является ли файл HEIC
+    const ext = path.extname(inputPath).toLowerCase();
+    const isHeic = ext === ".heic" || ext === ".heif";
+
+    let sharpInstance;
+    if (isHeic) {
+      // Для HEIC файлов используем специальную обработку
+      try {
+        sharpInstance = sharp(inputPath, { failOn: "none" });
+      } catch (error) {
+        console.warn(
+          "Sharp cannot process HEIC directly, skipping watermark:",
+          error.message
+        );
+        return false;
+      }
+    } else {
+      sharpInstance = sharp(inputPath);
+    }
+
     // Получаем метаданные изображения
-    const metadata = await sharp(inputPath).metadata();
+    const metadata = await sharpInstance.metadata();
     const { width, height } = metadata;
 
     // Адаптивный размер шрифта в зависимости от размера изображения
@@ -95,7 +115,7 @@ export async function addWatermarkToImage(inputPath, outputPath, options = {}) {
     }
 
     // Накладываем водяной знак
-    await sharp(inputPath)
+    await sharpInstance
       .composite([
         {
           input: watermarkSVG,
@@ -218,7 +238,15 @@ export async function createWatermarkedVariants(
  */
 export function shouldAddWatermark(filePath) {
   const ext = path.extname(filePath).toLowerCase();
-  const imageExtensions = [".jpg", ".jpeg", ".png", ".webp", ".gif"];
+  const imageExtensions = [
+    ".jpg",
+    ".jpeg",
+    ".png",
+    ".webp",
+    ".gif",
+    ".heic",
+    ".heif",
+  ];
   return imageExtensions.includes(ext);
 }
 

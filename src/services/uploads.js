@@ -3,6 +3,7 @@ import { fileURLToPath } from "url";
 import fs from "fs";
 import multer from "multer";
 import crypto from "crypto";
+import heicConvert from "heic-convert";
 import {
   processImageWithWatermark,
   shouldAddWatermark,
@@ -65,6 +66,22 @@ const videoExtensions = new Set([
   ".mpeg",
 ]);
 
+// --- конвертация HEIC файлов ---
+async function convertHeicToJpeg(inputBuffer) {
+  try {
+    const outputBuffer = await heicConvert({
+      buffer: inputBuffer,
+      format: "JPEG",
+      quality: 0.9,
+    });
+
+    return outputBuffer;
+  } catch (error) {
+    console.error("Error converting HEIC to JPEG:", error);
+    throw new Error("Failed to convert HEIC file");
+  }
+}
+
 // --- генерация имени файла ---
 function makeMulterStorage(dir) {
   return multer.diskStorage({
@@ -72,7 +89,10 @@ function makeMulterStorage(dir) {
     filename: (_req, file, cb) => {
       const ext = path.extname(file.originalname || "").toLowerCase();
       const mimetype = (file.mimetype || "").toLowerCase();
-      const isHeic = /\.(heic|heif)$/i.test(ext);
+      const isHeic =
+        /\.(heic|heif)$/i.test(ext) ||
+        mimetype === "image/heic" ||
+        mimetype === "image/heif";
 
       let safeExt = ".bin";
       if (imageExtensions.has(ext)) {
@@ -156,38 +176,62 @@ function watermarkMiddleware(uploadMiddleware) {
         // Обрабатываем загруженные файлы
         if (req.file) {
           // Одиночный файл
-          if (shouldAddWatermark(req.file.path)) {
-            await processImageWithWatermark(req.file.path, req.file.path, {
-              text: "Ля Креведко",
-              opacity: 0.5,
-              color: "#ffffff",
-              rotation: -15,
-              position: "center",
-            });
-          }
+          await processFileWithHeicSupport(req.file);
         } else if (req.files && req.files.length > 0) {
           // Множественные файлы
           for (const file of req.files) {
-            if (shouldAddWatermark(file.path)) {
-              await processImageWithWatermark(file.path, file.path, {
-                text: "Ля Креведко",
-                opacity: 0.5,
-                color: "#ffffff",
-                rotation: -15,
-                position: "center",
-              });
-            }
+            await processFileWithHeicSupport(file);
           }
         }
 
         next();
       } catch (watermarkError) {
-        console.error("Error adding watermark:", watermarkError);
-        // Не прерываем процесс загрузки, если водяной знак не удалось добавить
+        console.error("Error processing file:", watermarkError);
+        // Не прерываем процесс загрузки, если обработка не удалась
         next();
       }
     });
   };
+
+  // Функция для обработки файла с поддержкой HEIC
+  async function processFileWithHeicSupport(file) {
+    const isHeic =
+      file.mimetype === "image/heic" ||
+      file.mimetype === "image/heif" ||
+      /\.(heic|heif)$/i.test(file.originalname);
+
+    if (isHeic) {
+      try {
+        // Читаем HEIC файл
+        const heicBuffer = await fs.promises.readFile(file.path);
+
+        // Конвертируем в JPEG
+        const jpegBuffer = await convertHeicToJpeg(heicBuffer);
+
+        // Перезаписываем файл с JPEG данными
+        await fs.promises.writeFile(file.path, jpegBuffer);
+
+        // Обновляем mimetype в объекте файла
+        file.mimetype = "image/jpeg";
+
+        console.log(`Converted HEIC file to JPEG: ${file.filename}`);
+      } catch (conversionError) {
+        console.error("Error converting HEIC file:", conversionError);
+        // Если конвертация не удалась, продолжаем с оригинальным файлом
+      }
+    }
+
+    // Добавляем водяной знак, если нужно
+    if (shouldAddWatermark(file.path)) {
+      await processImageWithWatermark(file.path, file.path, {
+        text: "Ля Креведко",
+        opacity: 0.5,
+        color: "#ffffff",
+        rotation: -15,
+        position: "center",
+      });
+    }
+  }
 
   // Копируем методы Multer из оригинального middleware
   if (uploadMiddleware.single) {
@@ -225,6 +269,9 @@ function watermarkMiddleware(uploadMiddleware) {
 export const productUpload = watermarkMiddleware(
   makeImageUpload({ dir: uploadProductsDir })
 );
+
+// Экспортируем функцию конвертации для тестирования
+export { convertHeicToJpeg };
 export const paymentUpload = watermarkMiddleware(
   makeImageUpload({ dir: uploadPaymentsDir })
 );

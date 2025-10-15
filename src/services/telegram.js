@@ -22,7 +22,21 @@ async function ensureFetch() {
 
 export function verifyTelegramLogin(authData, botToken = TELEGRAM_BOT_TOKEN) {
   const { hash, ...data } = authData || {};
-  if (!hash || !botToken) return false;
+
+  // Улучшенная диагностика для проблем с iPhone
+  console.log("Telegram auth verification:", {
+    hasHash: !!hash,
+    hasBotToken: !!botToken,
+    dataKeys: Object.keys(data),
+    dataValues: Object.values(data).map((v) =>
+      typeof v === "string" ? v.substring(0, 10) + "..." : v
+    ),
+  });
+
+  if (!hash || !botToken) {
+    console.warn("Telegram auth missing hash or bot token");
+    return false;
+  }
 
   const secret = crypto.createHash("sha256").update(botToken).digest();
   const checkString = Object.keys(data)
@@ -34,7 +48,18 @@ export function verifyTelegramLogin(authData, botToken = TELEGRAM_BOT_TOKEN) {
     .createHmac("sha256", secret)
     .update(checkString)
     .digest("hex");
-  return hmac === hash;
+
+  const isValid = hmac === hash;
+
+  if (!isValid) {
+    console.warn("Telegram auth signature mismatch:", {
+      expected: hmac,
+      received: hash,
+      checkString: checkString.substring(0, 100) + "...",
+    });
+  }
+
+  return isValid;
 }
 
 export async function sendTelegramMessage(chatId, text, options = {}) {

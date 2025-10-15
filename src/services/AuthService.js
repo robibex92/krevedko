@@ -454,13 +454,29 @@ export class AuthService {
   async telegramVerify(authData, ipAddress = null) {
     const { TELEGRAM_BOT_TOKEN, TELEGRAM_BOT_USERNAME } = process.env;
 
+    console.log("Telegram verify request:", {
+      hasAuthData: !!authData,
+      authDataKeys: authData ? Object.keys(authData) : [],
+      ipAddress,
+      hasBotToken: !!TELEGRAM_BOT_TOKEN,
+      hasBotUsername: !!TELEGRAM_BOT_USERNAME,
+    });
+
     if (!TELEGRAM_BOT_TOKEN || !TELEGRAM_BOT_USERNAME) {
+      console.error("Telegram not configured:", {
+        hasBotToken: !!TELEGRAM_BOT_TOKEN,
+        hasBotUsername: !!TELEGRAM_BOT_USERNAME,
+      });
       throw new BusinessLogicError("TELEGRAM_NOT_CONFIGURED");
     }
 
     // Verify telegram signature
     const valid = this.verifyTelegramLogin(authData, TELEGRAM_BOT_TOKEN);
     if (!valid) {
+      console.error("Invalid Telegram signature:", {
+        authData: authData ? Object.keys(authData) : null,
+        ipAddress,
+      });
       throw new UnauthorizedError("INVALID_TELEGRAM_SIGNATURE");
     }
 
