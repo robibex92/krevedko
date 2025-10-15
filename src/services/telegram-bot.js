@@ -262,22 +262,37 @@ export function buildReviewMessage(review, user) {
   lines.push(stars);
   lines.push("");
 
-  // Приоритет: username > firstName > lastName > name > email
-  const userName =
-    user.username ||
-    user.firstName ||
-    user.lastName ||
-    user.name ||
-    user.email ||
-    "Клиент";
-  lines.push(`От: ${userName}`);
-  lines.push("");
-
+  // Заголовок сразу под звездами
   if (review.title) {
     // Используем HTML для жирного текста
     lines.push(`<b>${review.title}</b>`);
     lines.push("");
   }
+
+  // Приоритет: username > firstName > lastName > name > email
+  console.log("[buildReviewMessage] User data:", {
+    username: user.username,
+    firstName: user.firstName,
+    lastName: user.lastName,
+    name: user.name,
+    email: user.email,
+  });
+
+  let userName = "Клиент";
+  if (user.username && user.username.trim()) {
+    userName = `@${user.username}`;
+  } else if (user.firstName && user.firstName.trim()) {
+    userName = user.firstName;
+  } else if (user.lastName && user.lastName.trim()) {
+    userName = user.lastName;
+  } else if (user.name && user.name.trim()) {
+    userName = user.name;
+  } else if (user.email && user.email.trim()) {
+    userName = user.email;
+  }
+
+  lines.push(`От: ${userName}`);
+  lines.push("");
 
   lines.push(review.content);
 

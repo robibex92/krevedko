@@ -166,8 +166,8 @@ function watermarkMiddleware(uploadMiddleware) {
             );
             await processImageWithWatermark(req.file.path, req.file.path, {
               text: "Ля Креведко",
-              opacity: 0.3,
-              color: "#ffffff",
+              opacity: 0.5,
+              color: "#000000",
               rotation: -15,
               position: "center",
             });
@@ -196,8 +196,8 @@ function watermarkMiddleware(uploadMiddleware) {
               );
               await processImageWithWatermark(file.path, file.path, {
                 text: "Ля Креведко",
-                opacity: 0.3,
-                color: "#ffffff",
+                opacity: 0.5,
+                color: "#000000",
                 rotation: -15,
                 position: "center",
               });
