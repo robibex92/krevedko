@@ -128,7 +128,35 @@ export class ProductController extends BaseController {
       });
     } catch (error) {
       console.error("Error updating product image:", error);
-      throw error;
+
+      // Возвращаем более информативную ошибку
+      if (error.message === "NO_FILE") {
+        return res.status(400).json({
+          error: "NO_FILE",
+          message: "Файл не был загружен",
+        });
+      }
+
+      if (error.message === "INVALID_FILE_TYPE") {
+        return res.status(400).json({
+          error: "INVALID_FILE_TYPE",
+          message:
+            "Неподдерживаемый тип файла. Разрешены: JPEG, PNG, WebP, HEIC",
+        });
+      }
+
+      if (error.message.includes("File too large")) {
+        return res.status(400).json({
+          error: "FILE_TOO_LARGE",
+          message: "Файл слишком большой. Максимальный размер: 5 МБ",
+        });
+      }
+
+      return res.status(500).json({
+        error: "PRODUCT_IMAGE_UPLOAD_FAILED",
+        message: error.message || "Ошибка загрузки изображения",
+        details: error.stack,
+      });
     }
   }
 

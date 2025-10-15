@@ -85,8 +85,16 @@ async function convertHeicToJpeg(inputBuffer) {
 // --- генерация имени файла ---
 function makeMulterStorage(dir) {
   return multer.diskStorage({
-    destination: (_req, _file, cb) => cb(null, dir),
-    filename: (_req, file, cb) => {
+    destination: (req, file, cb) => {
+      console.log("Multer destination:", {
+        dir,
+        originalname: file.originalname,
+        mimetype: file.mimetype,
+        fieldname: file.fieldname,
+      });
+      cb(null, dir);
+    },
+    filename: (req, file, cb) => {
       const ext = path.extname(file.originalname || "").toLowerCase();
       const mimetype = (file.mimetype || "").toLowerCase();
       const isHeic =
@@ -108,6 +116,16 @@ function makeMulterStorage(dir) {
       }
 
       const name = `${Date.now()}-${crypto.randomBytes(6).toString("hex")}${safeExt}`;
+
+      console.log("Multer filename generation:", {
+        originalname: file.originalname,
+        ext,
+        mimetype,
+        isHeic,
+        safeExt,
+        generatedName: name,
+      });
+
       cb(null, name);
     },
   });
@@ -120,17 +138,36 @@ function makeImageUpload({ dir, maxFiles = 1, fileSizeMb = 5 }) {
     Number.isFinite(envLimit) && envLimit > 0 ? envLimit : Number(fileSizeMb);
   const uploadLimitBytes = Math.max(1, Number(effectiveMb)) * 1024 * 1024;
 
+  console.log("Creating image upload middleware:", {
+    dir,
+    maxFiles,
+    fileSizeMb: effectiveMb,
+    uploadLimitBytes,
+    allowedMimes: Array.from(imageMimes),
+  });
+
   return multer({
     storage: makeMulterStorage(dir),
     limits: { fileSize: uploadLimitBytes, files: maxFiles },
-    fileFilter: (_req, file, cb) => {
+    fileFilter: (req, file, cb) => {
+      console.log("File filter check:", {
+        originalname: file.originalname,
+        mimetype: file.mimetype,
+        size: file.size,
+        fieldname: file.fieldname,
+        isAllowed: imageMimes.has(file.mimetype),
+      });
+
       if (imageMimes.has(file.mimetype)) {
+        console.log("File accepted:", file.originalname);
         cb(null, true);
       } else {
         console.warn(
           "[upload] rejected file:",
           file.originalname,
-          file.mimetype
+          file.mimetype,
+          "Allowed types:",
+          Array.from(imageMimes)
         );
         cb(new Error("INVALID_FILE_TYPE"));
       }
@@ -167,10 +204,33 @@ function makeMediaUpload({ dir, maxFiles = 1, fileSizeMb = 50 }) {
 function watermarkMiddleware(uploadMiddleware) {
   // Создаем обертку, которая сохраняет методы Multer
   const watermarkWrapper = (req, res, next) => {
+    console.log("Upload middleware called:", {
+      method: req.method,
+      path: req.path,
+      contentType: req.headers["content-type"],
+      contentLength: req.headers["content-length"],
+      hasFile: !!req.file,
+      hasFiles: !!(req.files && req.files.length > 0),
+    });
+
     uploadMiddleware(req, res, async (err) => {
       if (err) {
+        console.error("Multer error:", err);
         return next(err);
       }
+
+      console.log("Multer processing completed:", {
+        hasFile: !!req.file,
+        hasFiles: !!(req.files && req.files.length > 0),
+        fileDetails: req.file
+          ? {
+              filename: req.file.filename,
+              originalname: req.file.originalname,
+              mimetype: req.file.mimetype,
+              size: req.file.size,
+            }
+          : null,
+      });
 
       try {
         // Обрабатываем загруженные файлы
@@ -184,6 +244,7 @@ function watermarkMiddleware(uploadMiddleware) {
           }
         }
 
+        console.log("File processing completed successfully");
         next();
       } catch (watermarkError) {
         console.error("Error processing file:", watermarkError);
