@@ -77,10 +77,39 @@ export class GuestCartService {
       throw new ValidationError("sessionId is required");
     }
 
+    if (!productId) {
+      throw new ValidationError("productId is required");
+    }
+
+    if (!collectionId) {
+      throw new ValidationError("collectionId is required");
+    }
+
+    // Преобразуем в числа
+    const numericProductId = Number(productId);
+    const numericCollectionId = Number(collectionId);
+
+    if (isNaN(numericProductId)) {
+      throw new ValidationError(`Invalid productId: ${productId}`);
+    }
+
+    if (isNaN(numericCollectionId)) {
+      throw new ValidationError(`Invalid collectionId: ${collectionId}`);
+    }
+
+    console.log("[GuestCartService] addItemToGuestCart called with:", {
+      sessionId,
+      productId,
+      numericProductId,
+      collectionId,
+      numericCollectionId,
+      quantity,
+    });
+
     // Get pricing
     const pricing = await this.pricingService.getProductPricing(
-      productId,
-      collectionId
+      numericProductId,
+      numericCollectionId
     );
 
     if (!pricing.isAvailable) {
@@ -94,8 +123,8 @@ export class GuestCartService {
     const existingItem = await this.prisma.cartItem.findFirst({
       where: {
         sessionId,
-        productId,
-        collectionId,
+        productId: numericProductId,
+        collectionId: numericCollectionId,
         isActive: true,
       },
     });
@@ -123,8 +152,8 @@ export class GuestCartService {
     return await this.prisma.cartItem.create({
       data: {
         sessionId,
-        productId,
-        collectionId,
+        productId: numericProductId,
+        collectionId: numericCollectionId,
         quantityDecimal: new Decimal(quantity),
         unitPriceKopecks: pricing.finalPrice,
         isActive: true,

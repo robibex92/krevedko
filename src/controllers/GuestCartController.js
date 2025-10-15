@@ -35,11 +35,34 @@ export class GuestCartController extends BaseController {
    * Add item to guest cart
    */
   addItem = async (req, res) => {
-    const { sessionId, productId, collectionId, quantity } = req.body;
+    const {
+      sessionId,
+      product_id,
+      productId,
+      collection_id,
+      collectionId,
+      quantity,
+    } = req.body;
+
+    // Поддерживаем оба варианта для совместимости
+    const finalProductId = product_id || productId;
+    const finalCollectionId = collection_id || collectionId;
+
+    console.log("[GuestCartController] addItem called with:", {
+      sessionId,
+      product_id,
+      productId,
+      finalProductId,
+      collection_id,
+      collectionId,
+      finalCollectionId,
+      quantity,
+    });
+
     const item = await this.guestCartService.addItemToGuestCart(
       sessionId,
-      productId,
-      collectionId,
+      finalProductId,
+      finalCollectionId,
       quantity
     );
     this.success(res, { item }, "Item added to cart");
