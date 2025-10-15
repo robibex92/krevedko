@@ -146,7 +146,9 @@ function makeMediaUpload({ dir, maxFiles = 1, fileSizeMb = 50 }) {
 // --- middleware для обработки изображений с водяным знаком ---
 function watermarkMiddleware(uploadMiddleware) {
   console.log("[WatermarkMiddleware] Creating watermark middleware wrapper");
-  return (req, res, next) => {
+
+  // Создаем обертку, которая сохраняет методы Multer
+  const watermarkWrapper = (req, res, next) => {
     console.log("[WatermarkMiddleware] Middleware called for:", req.path);
     console.log("[WatermarkMiddleware] About to call uploadMiddleware");
     uploadMiddleware(req, res, async (err) => {
@@ -250,6 +252,37 @@ function watermarkMiddleware(uploadMiddleware) {
       }
     });
   };
+
+  // Копируем методы Multer из оригинального middleware
+  if (uploadMiddleware.single) {
+    watermarkWrapper.single = (fieldName) => {
+      const singleMiddleware = uploadMiddleware.single(fieldName);
+      return watermarkMiddleware(singleMiddleware);
+    };
+  }
+
+  if (uploadMiddleware.array) {
+    watermarkWrapper.array = (fieldName, maxCount) => {
+      const arrayMiddleware = uploadMiddleware.array(fieldName, maxCount);
+      return watermarkMiddleware(arrayMiddleware);
+    };
+  }
+
+  if (uploadMiddleware.fields) {
+    watermarkWrapper.fields = (fields) => {
+      const fieldsMiddleware = uploadMiddleware.fields(fields);
+      return watermarkMiddleware(fieldsMiddleware);
+    };
+  }
+
+  if (uploadMiddleware.none) {
+    watermarkWrapper.none = () => {
+      const noneMiddleware = uploadMiddleware.none();
+      return watermarkMiddleware(noneMiddleware);
+    };
+  }
+
+  return watermarkWrapper;
 }
 
 // --- экспорт готовых загрузчиков ---
