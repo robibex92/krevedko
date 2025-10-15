@@ -269,6 +269,10 @@ export function buildReviewMessage(review, user) {
     lines.push("");
   }
 
+  // Сначала текст отзыва
+  lines.push(review.content);
+  lines.push("");
+
   // Приоритет: telegramUsername > firstName > lastName > name > email
   console.log("[buildReviewMessage] User data:", {
     telegramUsername: user.telegramUsername,
@@ -291,10 +295,7 @@ export function buildReviewMessage(review, user) {
     userName = user.email;
   }
 
-  lines.push(`От: ${userName}`);
-  lines.push("");
-
-  lines.push(review.content);
+  lines.push(`Отзыв от: ${userName}`);
 
   return lines.join("\n");
 }
@@ -950,6 +951,7 @@ export async function sendReviewToChat(prisma, review, user) {
       // Только текст
       await sendTelegramMessage(settings.chatId, messageText, {
         threadId: settings.threadId,
+        parseMode: "HTML",
       });
     } else if (images.length === 1) {
       // Одно изображение
@@ -960,6 +962,7 @@ export async function sendReviewToChat(prisma, review, user) {
       );
       await sendTelegramPhoto(settings.chatId, imagePath, messageText, {
         threadId: settings.threadId,
+        parseMode: "HTML",
       });
     } else {
       // Несколько изображений - отправляем как медиа-группу
@@ -975,6 +978,7 @@ export async function sendReviewToChat(prisma, review, user) {
       try {
         await sendTelegramMediaGroup(settings.chatId, mediaGroup, {
           threadId: settings.threadId,
+          parseMode: "HTML",
         });
       } catch (mediaGroupError) {
         console.warn(
