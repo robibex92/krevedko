@@ -976,13 +976,14 @@ export async function sendReviewToChat(prisma, review, user) {
           type: "photo",
           media: { source: imagePath },
           caption: index === 0 ? messageText : undefined, // Текст только к первому изображению
+          parse_mode: index === 0 ? "HTML" : undefined, // parse_mode только к первому элементу
         };
       });
 
       try {
         await sendTelegramMediaGroup(settings.chatId, mediaGroup, {
           threadId: settings.threadId,
-          parse_mode: "HTML",
+          // parse_mode удаляем отсюда, так как он уже в каждом элементе
         });
       } catch (mediaGroupError) {
         console.warn(
@@ -1002,7 +1003,7 @@ export async function sendReviewToChat(prisma, review, user) {
           );
           await sendTelegramPhoto(settings.chatId, imagePath, "", {
             threadId: settings.threadId,
-            parse_mode: "HTML",
+            // Для фото без текста parse_mode не нужен
           });
         }
       }

@@ -179,6 +179,11 @@ export async function sendTelegramMediaGroup(chatId, mediaGroup, options = {}) {
       mediaItem.caption = item.caption;
     }
 
+    // Добавляем parse_mode для каждого элемента, если он указан
+    if (item.parse_mode) {
+      mediaItem.parse_mode = item.parse_mode;
+    }
+
     media.push(mediaItem);
 
     // Добавляем файл
@@ -189,10 +194,6 @@ export async function sendTelegramMediaGroup(chatId, mediaGroup, options = {}) {
   }
 
   formData.append("media", JSON.stringify(media));
-  formData.append(
-    "parse_mode",
-    options.parse_mode || options.parseMode || "HTML"
-  );
 
   const res = await fetchImpl(url, {
     method: "POST",
