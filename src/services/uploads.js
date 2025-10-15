@@ -145,103 +145,39 @@ function makeMediaUpload({ dir, maxFiles = 1, fileSizeMb = 50 }) {
 
 // --- middleware для обработки изображений с водяным знаком ---
 function watermarkMiddleware(uploadMiddleware) {
-  console.log("[WatermarkMiddleware] Creating watermark middleware wrapper");
-
   // Создаем обертку, которая сохраняет методы Multer
   const watermarkWrapper = (req, res, next) => {
-    console.log("[WatermarkMiddleware] Middleware called for:", req.path);
-    console.log("[WatermarkMiddleware] About to call uploadMiddleware");
     uploadMiddleware(req, res, async (err) => {
       if (err) {
-        console.log("[WatermarkMiddleware] Upload error:", err.message);
         return next(err);
       }
 
       try {
-        console.log("[WatermarkMiddleware] Starting watermark processing...");
-        console.log(
-          "[WatermarkMiddleware] req.file:",
-          req.file ? req.file.path : "null"
-        );
-        console.log(
-          "[WatermarkMiddleware] req.files:",
-          req.files ? req.files.length : "null"
-        );
-
         // Обрабатываем загруженные файлы
         if (req.file) {
           // Одиночный файл
-          console.log(
-            "[WatermarkMiddleware] Processing single file:",
-            req.file.path
-          );
-          const shouldWatermark = shouldAddWatermark(req.file.path);
-          console.log(
-            "[WatermarkMiddleware] shouldAddWatermark result:",
-            shouldWatermark
-          );
-
-          if (shouldWatermark) {
-            console.log(
-              "[WatermarkMiddleware] Adding watermark to:",
-              req.file.path
-            );
+          if (shouldAddWatermark(req.file.path)) {
             await processImageWithWatermark(req.file.path, req.file.path, {
               text: "Ля Креведко",
               opacity: 0.5,
-              color: "#000000",
+              color: "#ffffff",
               rotation: -15,
               position: "center",
             });
-            console.log(
-              "[WatermarkMiddleware] Watermark added to:",
-              req.file.path
-            );
-          } else {
-            console.log(
-              "[WatermarkMiddleware] Skipping watermark for:",
-              req.file.path
-            );
           }
         } else if (req.files && req.files.length > 0) {
           // Множественные файлы
-          console.log(
-            "[WatermarkMiddleware] Processing multiple files:",
-            req.files.length
-          );
           for (const file of req.files) {
-            console.log("[WatermarkMiddleware] Processing file:", file.path);
-            const shouldWatermark = shouldAddWatermark(file.path);
-            console.log(
-              "[WatermarkMiddleware] shouldAddWatermark result:",
-              shouldWatermark
-            );
-
-            if (shouldWatermark) {
-              console.log(
-                "[WatermarkMiddleware] Adding watermark to:",
-                file.path
-              );
+            if (shouldAddWatermark(file.path)) {
               await processImageWithWatermark(file.path, file.path, {
                 text: "Ля Креведко",
                 opacity: 0.5,
-                color: "#000000",
+                color: "#ffffff",
                 rotation: -15,
                 position: "center",
               });
-              console.log(
-                "[WatermarkMiddleware] Watermark added to:",
-                file.path
-              );
-            } else {
-              console.log(
-                "[WatermarkMiddleware] Skipping watermark for:",
-                file.path
-              );
             }
           }
-        } else {
-          console.log("[WatermarkMiddleware] No files to process");
         }
 
         next();

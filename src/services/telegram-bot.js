@@ -274,13 +274,6 @@ export function buildReviewMessage(review, user) {
   lines.push("");
 
   // Приоритет: telegramUsername > firstName > lastName > name > email
-  console.log("[buildReviewMessage] User data:", {
-    telegramUsername: user.telegramUsername,
-    firstName: user.firstName,
-    lastName: user.lastName,
-    name: user.name,
-    email: user.email,
-  });
 
   let userName = "Клиент";
   if (user.telegramUsername && user.telegramUsername.trim()) {
@@ -584,13 +577,22 @@ export async function sendProductToCategory(prisma, product, category) {
             error
           );
           // Если не удалось отправить фото, отправляем текст
-          result = await sendTelegramMessage(chatId, messageText, { threadId });
+          result = await sendTelegramMessage(chatId, messageText, {
+            threadId,
+            parse_mode: "HTML",
+          });
         }
       } else {
-        result = await sendTelegramMessage(chatId, messageText, { threadId });
+        result = await sendTelegramMessage(chatId, messageText, {
+          threadId,
+          parse_mode: "HTML",
+        });
       }
     } else {
-      result = await sendTelegramMessage(chatId, messageText, { threadId });
+      result = await sendTelegramMessage(chatId, messageText, {
+        threadId,
+        parse_mode: "HTML",
+      });
     }
 
     // Сохраняем информацию о сообщении
@@ -866,11 +868,13 @@ export async function addProductToQuickPickup(prisma, product) {
         );
         result = await sendTelegramMessage(settings.chatId, messageText, {
           threadId: settings.threadId,
+          parse_mode: "HTML",
         });
       }
     } else {
       result = await sendTelegramMessage(settings.chatId, messageText, {
         threadId: settings.threadId,
+        parse_mode: "HTML",
       });
     }
 
@@ -988,6 +992,7 @@ export async function sendReviewToChat(prisma, review, user) {
         // Fallback: отправляем текст + изображения по одному
         await sendTelegramMessage(settings.chatId, messageText, {
           threadId: settings.threadId,
+          parse_mode: "HTML",
         });
         for (const image of images) {
           const imagePath = path.join(
@@ -997,6 +1002,7 @@ export async function sendReviewToChat(prisma, review, user) {
           );
           await sendTelegramPhoto(settings.chatId, imagePath, "", {
             threadId: settings.threadId,
+            parse_mode: "HTML",
           });
         }
       }
@@ -1025,6 +1031,7 @@ export async function sendRecipeToChat(prisma, recipe) {
 
     await sendTelegramMessage(settings.chatId, messageText, {
       threadId: settings.threadId,
+      parse_mode: "HTML",
     });
   } catch (error) {
     console.error(`Failed to send recipe ${recipe.id} to chat:`, error);

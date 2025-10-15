@@ -65,28 +65,8 @@ router.get("/public/reviews", async (req, res) => {
 // POST /api/public/reviews
 router.post(
   "/public/reviews",
-  (req, res, next) => {
-    console.log("[public-reviews] Route handler called");
-    next();
-  },
   requireAuth,
-  (req, res, next) => {
-    console.log("[public-reviews] After requireAuth, before reviewUpload");
-    next();
-  },
   reviewUpload.array("images", 5),
-  (req, res, next) => {
-    console.log("[public-reviews] After reviewUpload middleware");
-    console.log(
-      "[public-reviews] req.files:",
-      req.files ? req.files.length : "null"
-    );
-    console.log(
-      "[public-reviews] req.file:",
-      req.file ? req.file.path : "null"
-    );
-    next();
-  },
   async (req, res) => {
     const prisma = req.app.locals.prisma;
     try {

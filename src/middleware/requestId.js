@@ -74,9 +74,6 @@ export function requestLogger(req, res, next) {
 
   // Логируем начало запроса
   const userInfo = req.user ? `[User: ${req.user.id}]` : "[Guest]";
-  console.log(
-    `[requestLogger] Logging request: ${req.method} ${req.originalUrl || req.url} ${userInfo}`
-  );
   req.log.info(`→ ${req.method} ${req.originalUrl || req.url}`, userInfo);
 
   // Перехватываем окончание запроса
