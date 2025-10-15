@@ -181,8 +181,42 @@ export class ProductService {
             productId: product.id,
           });
         }
-        // If product is active and has category, update message
-        else if (product.isActive && product.category) {
+        // Handle category change
+        else if (
+          data.category !== undefined &&
+          oldProduct.category !== product.category
+        ) {
+          // Remove from old category if it existed
+          if (oldProduct.category) {
+            const oldCategory = await this.prisma.category.findUnique({
+              where: { name: oldProduct.category, isActive: true },
+            });
+            if (oldCategory) {
+              await this.telegramBotService.enqueueMessage("product_remove", {
+                productId: product.id,
+              });
+            }
+          }
+
+          // Add to new category if product is active
+          if (product.isActive && product.category) {
+            const newCategory = await this.prisma.category.findUnique({
+              where: { name: product.category, isActive: true },
+            });
+            if (newCategory) {
+              await this.telegramBotService.enqueueMessage("product_create", {
+                productId: product.id,
+                categoryId: newCategory.id,
+              });
+            }
+          }
+        }
+        // If product is active and has category, update message (no category change)
+        else if (
+          product.isActive &&
+          product.category &&
+          oldProduct.category === product.category
+        ) {
           const category = await this.prisma.category.findUnique({
             where: { name: product.category, isActive: true },
           });
@@ -396,5 +430,27 @@ export class ProductService {
     }
 
     return response;
+  }
+
+  /**
+   * Delete product completely (admin)
+   * Removes from all Telegram chats and database
+   */
+  async deleteProduct(productId) {
+    // 1. Удаляем из всех Telegram чатов
+    await this.telegramBotService.markProductAsRemoved(productId);
+
+    // 2. Удаляем из чата быстрых продаж
+    await this.telegramBotService.removeProductFromQuickPickup(productId);
+
+    // 3. Удаляем из базы данных
+    const deletedProduct = await this.productRepo.delete(productId);
+
+    return {
+      message: "Product deleted successfully",
+      product: deletedProduct,
+      telegramMessagesRemoved: true,
+      quickPickupRemoved: true,
+    };
   }
 }

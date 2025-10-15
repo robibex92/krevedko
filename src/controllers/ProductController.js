@@ -70,6 +70,18 @@ export class ProductController extends BaseController {
   }
 
   /**
+   * Delete product (admin)
+   * DELETE /api/admin/products/:id
+   */
+  async deleteProduct(req, res) {
+    const productId = Number(req.params.id);
+
+    const result = await this.productService.deleteProduct(productId);
+
+    return this.success(res, result);
+  }
+
+  /**
    * Upload product image (admin)
    * POST /api/admin/products/:id/image
    */
@@ -178,9 +190,10 @@ export class ProductController extends BaseController {
     }
 
     // Get active products and process with collection overrides
-    const result = await this.productService.getProductsWithCollectionOverrides(
-      targetCollections
-    );
+    const result =
+      await this.productService.getProductsWithCollectionOverrides(
+        targetCollections
+      );
 
     // Применяем DTO для списка продуктов (уменьшает размер ответа на 70%)
     const optimizedResult = {

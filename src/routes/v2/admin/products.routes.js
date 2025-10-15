@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { asyncHandler } from "../../../core/middleware/asyncHandler.js";
 import { requireAuth, requireAdmin } from "../../../middleware/auth.js";
-import { productUploadBase } from "../../../services/uploads.js";
+import { productUpload } from "../../../services/uploads.js";
 
 export function createAdminProductRoutes(container) {
   const router = Router();
@@ -17,9 +17,10 @@ export function createAdminProductRoutes(container) {
     "/products/:id/stock",
     asyncHandler(productController.updateStock)
   );
+  router.delete("/products/:id", asyncHandler(productController.deleteProduct));
   router.post(
     "/products/:id/image",
-    productUploadBase.single("image"),
+    productUpload.single("image"),
     asyncHandler(productController.uploadImage)
   );
   router.get(
