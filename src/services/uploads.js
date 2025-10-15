@@ -152,6 +152,16 @@ function watermarkMiddleware(uploadMiddleware) {
       }
 
       try {
+        console.log("[WatermarkMiddleware] Starting watermark processing...");
+        console.log(
+          "[WatermarkMiddleware] req.file:",
+          req.file ? req.file.path : "null"
+        );
+        console.log(
+          "[WatermarkMiddleware] req.files:",
+          req.files ? req.files.length : "null"
+        );
+
         // Обрабатываем загруженные файлы
         if (req.file) {
           // Одиночный файл
@@ -159,7 +169,13 @@ function watermarkMiddleware(uploadMiddleware) {
             "[WatermarkMiddleware] Processing single file:",
             req.file.path
           );
-          if (shouldAddWatermark(req.file.path)) {
+          const shouldWatermark = shouldAddWatermark(req.file.path);
+          console.log(
+            "[WatermarkMiddleware] shouldAddWatermark result:",
+            shouldWatermark
+          );
+
+          if (shouldWatermark) {
             console.log(
               "[WatermarkMiddleware] Adding watermark to:",
               req.file.path
@@ -189,7 +205,13 @@ function watermarkMiddleware(uploadMiddleware) {
           );
           for (const file of req.files) {
             console.log("[WatermarkMiddleware] Processing file:", file.path);
-            if (shouldAddWatermark(file.path)) {
+            const shouldWatermark = shouldAddWatermark(file.path);
+            console.log(
+              "[WatermarkMiddleware] shouldAddWatermark result:",
+              shouldWatermark
+            );
+
+            if (shouldWatermark) {
               console.log(
                 "[WatermarkMiddleware] Adding watermark to:",
                 file.path
@@ -212,6 +234,8 @@ function watermarkMiddleware(uploadMiddleware) {
               );
             }
           }
+        } else {
+          console.log("[WatermarkMiddleware] No files to process");
         }
 
         next();

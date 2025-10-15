@@ -264,14 +264,14 @@ export function buildReviewMessage(review, user) {
 
   // Заголовок сразу под звездами
   if (review.title) {
-    // Используем HTML для жирного текста
-    lines.push(`<b>${review.title}</b>`);
+    // Используем Markdown для жирного текста
+    lines.push(`**${review.title}**`);
     lines.push("");
   }
 
-  // Приоритет: username > firstName > lastName > name > email
+  // Приоритет: telegramUsername > firstName > lastName > name > email
   console.log("[buildReviewMessage] User data:", {
-    username: user.username,
+    telegramUsername: user.telegramUsername,
     firstName: user.firstName,
     lastName: user.lastName,
     name: user.name,
@@ -279,8 +279,8 @@ export function buildReviewMessage(review, user) {
   });
 
   let userName = "Клиент";
-  if (user.username && user.username.trim()) {
-    userName = `@${user.username}`;
+  if (user.telegramUsername && user.telegramUsername.trim()) {
+    userName = `@${user.telegramUsername}`;
   } else if (user.firstName && user.firstName.trim()) {
     userName = user.firstName;
   } else if (user.lastName && user.lastName.trim()) {
