@@ -264,8 +264,8 @@ export function buildReviewMessage(review, user) {
 
   // Заголовок сразу под звездами
   if (review.title) {
-    // Используем Markdown для жирного текста
-    lines.push(`**${review.title}**`);
+    // Используем HTML для жирного текста
+    lines.push(`<b>${review.title}</b>`);
     lines.push("");
   }
 

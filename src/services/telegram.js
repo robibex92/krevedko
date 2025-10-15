@@ -51,7 +51,7 @@ export async function sendTelegramMessage(chatId, text, options = {}) {
   const body = {
     chat_id: chatId,
     text,
-    parse_mode: options.parseMode || "Markdown",
+    parse_mode: options.parseMode || "HTML",
   };
 
   if (options.threadId) {
@@ -99,7 +99,7 @@ export async function sendTelegramPhoto(
     const body = {
       chat_id: chatId,
       photo: photoPath,
-      parse_mode: options.parseMode || "Markdown",
+      parse_mode: options.parseMode || "HTML",
     };
     if (caption) body.caption = caption;
     if (options.threadId) body.message_thread_id = options.threadId;
@@ -189,7 +189,7 @@ export async function sendTelegramMediaGroup(chatId, mediaGroup, options = {}) {
   }
 
   formData.append("media", JSON.stringify(media));
-  formData.append("parse_mode", "Markdown");
+  formData.append("parse_mode", "HTML");
 
   const res = await fetchImpl(url, {
     method: "POST",
