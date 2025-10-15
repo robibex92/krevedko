@@ -155,7 +155,15 @@ function watermarkMiddleware(uploadMiddleware) {
         // Обрабатываем загруженные файлы
         if (req.file) {
           // Одиночный файл
+          console.log(
+            "[WatermarkMiddleware] Processing single file:",
+            req.file.path
+          );
           if (shouldAddWatermark(req.file.path)) {
+            console.log(
+              "[WatermarkMiddleware] Adding watermark to:",
+              req.file.path
+            );
             await processImageWithWatermark(req.file.path, req.file.path, {
               text: "Ля Креведко",
               opacity: 0.3,
@@ -163,11 +171,29 @@ function watermarkMiddleware(uploadMiddleware) {
               rotation: -15,
               position: "center",
             });
+            console.log(
+              "[WatermarkMiddleware] Watermark added to:",
+              req.file.path
+            );
+          } else {
+            console.log(
+              "[WatermarkMiddleware] Skipping watermark for:",
+              req.file.path
+            );
           }
         } else if (req.files && req.files.length > 0) {
           // Множественные файлы
+          console.log(
+            "[WatermarkMiddleware] Processing multiple files:",
+            req.files.length
+          );
           for (const file of req.files) {
+            console.log("[WatermarkMiddleware] Processing file:", file.path);
             if (shouldAddWatermark(file.path)) {
+              console.log(
+                "[WatermarkMiddleware] Adding watermark to:",
+                file.path
+              );
               await processImageWithWatermark(file.path, file.path, {
                 text: "Ля Креведко",
                 opacity: 0.3,
@@ -175,6 +201,15 @@ function watermarkMiddleware(uploadMiddleware) {
                 rotation: -15,
                 position: "center",
               });
+              console.log(
+                "[WatermarkMiddleware] Watermark added to:",
+                file.path
+              );
+            } else {
+              console.log(
+                "[WatermarkMiddleware] Skipping watermark for:",
+                file.path
+              );
             }
           }
         }
@@ -211,9 +246,20 @@ export const notificationUpload = watermarkMiddleware(
 export const productUploadBase = makeImageUpload({ dir: uploadProductsDir });
 export const paymentUploadBase = makeImageUpload({ dir: uploadPaymentsDir });
 export const avatarUploadBase = makeImageUpload({ dir: uploadAvatarsDir });
-export const reviewUploadBase = makeImageUpload({ dir: uploadReviewsDir, maxFiles: 5 });
-export const recipesUploadBase = makeMediaUpload({ dir: uploadRecipesDir, maxFiles: 10, fileSizeMb: 200 });
-export const notificationUploadBase = makeImageUpload({ dir: uploadNotificationsDir, maxFiles: 3, fileSizeMb: 8 });
+export const reviewUploadBase = makeImageUpload({
+  dir: uploadReviewsDir,
+  maxFiles: 5,
+});
+export const recipesUploadBase = makeMediaUpload({
+  dir: uploadRecipesDir,
+  maxFiles: 10,
+  fileSizeMb: 200,
+});
+export const notificationUploadBase = makeImageUpload({
+  dir: uploadNotificationsDir,
+  maxFiles: 3,
+  fileSizeMb: 8,
+});
 
 // --- тестовый роут для проверки ---
 // пример использования (добавь в сервер):

@@ -257,15 +257,24 @@ export function buildQuickPickupMessage(product) {
 export function buildReviewMessage(review, user) {
   const lines = [];
 
+  // Показываем только звезды без "Новый отзыв"
   const stars = "⭐".repeat(review.rating);
-  lines.push(`<b>Новый отзыв</b> ${stars}`);
+  lines.push(stars);
   lines.push("");
 
-  const userName = user.firstName || user.name || "Клиент";
+  // Приоритет: username > firstName > lastName > name > email
+  const userName =
+    user.username ||
+    user.firstName ||
+    user.lastName ||
+    user.name ||
+    user.email ||
+    "Клиент";
   lines.push(`От: ${userName}`);
   lines.push("");
 
   if (review.title) {
+    // Используем HTML для жирного текста
     lines.push(`<b>${review.title}</b>`);
     lines.push("");
   }

@@ -28,6 +28,8 @@ router.get("/public/reviews", async (req, res) => {
               name: true,
               firstName: true,
               lastName: true,
+              username: true,
+              email: true,
               avatarPath: true,
             },
           },
@@ -105,6 +107,8 @@ router.post(
               name: true,
               firstName: true,
               lastName: true,
+              username: true,
+              email: true,
               avatarPath: true,
             },
           },
@@ -122,19 +126,17 @@ router.post(
         // Не возвращаем ошибку, отзыв уже создан
       }
 
-      res
-        .status(201)
-        .json({
-          review: {
-            id: created.id,
-            title: created.title,
-            content: created.content,
-            rating: created.rating,
-            createdAt: created.createdAt,
-            user: created.user,
-            images: created.images.map((img) => img.imagePath),
-          },
-        });
+      res.status(201).json({
+        review: {
+          id: created.id,
+          title: created.title,
+          content: created.content,
+          rating: created.rating,
+          createdAt: created.createdAt,
+          user: created.user,
+          images: created.images.map((img) => img.imagePath),
+        },
+      });
     } catch (err) {
       console.error(err);
       res.status(500).json({ error: "PUBLIC_REVIEW_CREATE_FAILED" });

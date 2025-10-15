@@ -195,6 +195,7 @@ export async function sendTelegramMediaGroup(chatId, mediaGroup, options = {}) {
   }
 
   formData.append("media", JSON.stringify(media));
+  formData.append("parse_mode", "HTML");
 
   const res = await fetchImpl(url, {
     method: "POST",
