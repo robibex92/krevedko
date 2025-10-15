@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { asyncHandler } from "../../core/middleware/asyncHandler.js";
 import { requireAuth } from "../../middleware/auth.js";
-import { reviewUploadBase } from "../../services/uploads.js";
+import { reviewUpload } from "../../services/uploads.js";
 
 /**
  * Create review routes
@@ -17,7 +17,7 @@ export function createReviewRoutes(container) {
   router.post(
     "/public/reviews",
     requireAuth,
-    reviewUploadBase.array("images", 5),
+    reviewUpload.array("images", 5),
     asyncHandler(reviewController.createReview)
   );
 
