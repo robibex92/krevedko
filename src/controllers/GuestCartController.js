@@ -59,13 +59,18 @@ export class GuestCartController extends BaseController {
       quantity,
     });
 
-    const item = await this.guestCartService.addItemToGuestCart(
-      sessionId,
-      finalProductId,
-      finalCollectionId,
-      quantity
-    );
-    this.success(res, { item }, "Item added to cart");
+    try {
+      const item = await this.guestCartService.addItemToGuestCart(
+        sessionId,
+        finalProductId,
+        finalCollectionId,
+        quantity
+      );
+      this.success(res, { item }, "Item added to cart");
+    } catch (error) {
+      console.error("[GuestCartController] addItem error:", error);
+      this.error(res, error);
+    }
   };
 
   /**

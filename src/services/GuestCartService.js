@@ -107,10 +107,20 @@ export class GuestCartService {
     });
 
     // Get pricing
-    const pricing = await this.pricingService.getProductPricing(
-      numericProductId,
-      numericCollectionId
-    );
+    let pricing;
+    try {
+      pricing = await this.pricingService.getProductPricing(
+        numericProductId,
+        numericCollectionId
+      );
+      console.log("[GuestCartService] Pricing result:", pricing);
+    } catch (pricingError) {
+      console.error("[GuestCartService] Pricing error:", pricingError);
+      throw new BusinessLogicError(
+        `Failed to get product pricing: ${pricingError.message}`,
+        "PRICING_ERROR"
+      );
+    }
 
     if (!pricing.isAvailable) {
       throw new BusinessLogicError(
@@ -139,7 +149,7 @@ export class GuestCartService {
         where: { id: existingItem.id },
         data: {
           quantityDecimal: newQuantity,
-          unitPriceKopecks: pricing.finalPrice,
+          unitPriceKopecks: pricing.price,
         },
         include: {
           product: true,
@@ -155,7 +165,7 @@ export class GuestCartService {
         productId: numericProductId,
         collectionId: numericCollectionId,
         quantityDecimal: new Decimal(quantity),
-        unitPriceKopecks: pricing.finalPrice,
+        unitPriceKopecks: pricing.price,
         isActive: true,
       },
       include: {

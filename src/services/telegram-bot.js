@@ -2,6 +2,7 @@ import path from "path";
 import {
   sendTelegramMessage,
   sendTelegramPhoto,
+  sendTelegramMediaGroup,
   editTelegramMessage,
   editTelegramMessageMedia,
   deleteTelegramMessage,
@@ -937,16 +938,39 @@ export async function sendReviewToChat(prisma, review, user) {
         threadId: settings.threadId,
       });
     } else {
-      // Несколько изображений - отправляем текст + альбом
-      await sendTelegramMessage(settings.chatId, messageText, {
-        threadId: settings.threadId,
-      });
-      // Для альбома нужен отдельный метод sendMediaGroup, упростим - отправим по одному
-      for (const image of images) {
+      // Несколько изображений - отправляем как медиа-группу
+      const mediaGroup = images.map((image, index) => {
         const imagePath = path.join(process.cwd(), "uploads", image.imagePath);
-        await sendTelegramPhoto(settings.chatId, imagePath, "", {
+        return {
+          type: "photo",
+          media: { source: imagePath },
+          caption: index === 0 ? messageText : undefined, // Текст только к первому изображению
+        };
+      });
+
+      try {
+        await sendTelegramMediaGroup(settings.chatId, mediaGroup, {
           threadId: settings.threadId,
         });
+      } catch (mediaGroupError) {
+        console.warn(
+          "Media group failed, sending individually:",
+          mediaGroupError
+        );
+        // Fallback: отправляем текст + изображения по одному
+        await sendTelegramMessage(settings.chatId, messageText, {
+          threadId: settings.threadId,
+        });
+        for (const image of images) {
+          const imagePath = path.join(
+            process.cwd(),
+            "uploads",
+            image.imagePath
+          );
+          await sendTelegramPhoto(settings.chatId, imagePath, "", {
+            threadId: settings.threadId,
+          });
+        }
       }
     }
   } catch (error) {

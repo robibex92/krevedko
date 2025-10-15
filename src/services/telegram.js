@@ -152,6 +152,67 @@ export async function sendTelegramPhoto(
   return result;
 }
 
+export async function sendTelegramMediaGroup(chatId, mediaGroup, options = {}) {
+  const { TELEGRAM_BOT_TOKEN: token } = process.env;
+  if (!token) {
+    throw new BusinessLogicError(
+      "Telegram bot token is not configured",
+      "TELEGRAM_NOT_CONFIGURED"
+    );
+  }
+
+  const fetchImpl = await ensureFetch();
+  const url = `https://api.telegram.org/bot${token}/sendMediaGroup`;
+
+  // Используем FormData для отправки файлов
+  const formData = new FormData();
+  formData.append("chat_id", String(chatId));
+
+  if (options.threadId) {
+    formData.append("message_thread_id", String(options.threadId));
+  }
+
+  // Подготавливаем медиа-группу
+  const media = [];
+  for (let i = 0; i < mediaGroup.length; i++) {
+    const item = mediaGroup[i];
+    const mediaItem = {
+      type: item.type,
+      media: `attach://file_${i}`,
+    };
+
+    if (item.caption) {
+      mediaItem.caption = item.caption;
+    }
+
+    media.push(mediaItem);
+
+    // Добавляем файл
+    const fileBuffer = await fs.readFile(item.media.source);
+    const fileName = path.basename(item.media.source);
+    const file = new FileAPI([fileBuffer], fileName, { type: "image/jpeg" });
+    formData.append(`file_${i}`, file, fileName);
+  }
+
+  formData.append("media", JSON.stringify(media));
+
+  const res = await fetchImpl(url, {
+    method: "POST",
+    body: formData,
+  });
+
+  if (!res.ok) {
+    const errorText = await res.text();
+    throw new BusinessLogicError(
+      `Telegram API error: ${res.status} ${errorText}`,
+      "TELEGRAM_API_ERROR"
+    );
+  }
+
+  const result = await res.json();
+  return result;
+}
+
 export async function editTelegramMessage(
   chatId,
   messageId,
