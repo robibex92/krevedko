@@ -106,7 +106,7 @@ export function buildProductMessage(product) {
   }
 
   lines.push("");
-  lines.push("━━━━━━━━━━━━━━━━━━━━");
+  lines.push("━━━━━━━━━");
 
   // Цена
   lines.push(
@@ -122,7 +122,7 @@ export function buildProductMessage(product) {
 export function buildProductRemovedMessage(originalText) {
   const lines = originalText.split("\n").map((line) => {
     // Не зачеркиваем разделитель
-    if (line === "━━━━━━━━━━━━━━━━━━━━") {
+    if (line === "━━━━━━━━━") {
       return line;
     }
     return `<s>${line}</s>`;
@@ -175,7 +175,7 @@ export function buildDiscountedProductMessage(
   }
 
   lines.push("");
-  lines.push("━━━━━━━━━━━━━━━━━━━━");
+  lines.push("━━━━━━━━━");
 
   // Цены со скидкой
   lines.push(
@@ -212,7 +212,7 @@ export function buildDiscountedProductMessage(
     lines.push(`📏 Мин. заказ: ${product.stepDecimal} ${product.unitLabel}`);
   }
 
-  lines.push("━━━━━━━━━━━━━━━━━━━━");
+  lines.push("━━━━━━━━━");
 
   // Призыв к действию
   lines.push(`🛒 <b>Заказать со скидкой!</b>`);
@@ -238,7 +238,7 @@ export function buildQuickPickupMessage(product) {
   }
 
   lines.push("");
-  lines.push("━━━━━━━━━━━━━━━━━━━━");
+  lines.push("━━━━━━━━━");
 
   // Цена
   lines.push(
@@ -328,7 +328,7 @@ export function buildRecipeMessage(recipe) {
   }
 
   lines.push("");
-  lines.push("━━━━━━━━━━━━━━━━━━━━");
+  lines.push("━━━━━━━━━");
 
   // Ссылка на рецепт
   const recipeUrl = `${process.env.FRONTEND_URL || ""}/recipes/${recipe.slug}`;
@@ -377,7 +377,7 @@ export function buildNewProductMessage(product) {
   }
 
   lines.push("");
-  lines.push("━━━━━━━━━━━━━━━━━━━━");
+  lines.push("━━━━━━━━━");
 
   // Цена с акцентом
   lines.push(
@@ -406,7 +406,7 @@ export function buildNewProductMessage(product) {
   }
 
   lines.push("");
-  lines.push("━━━━━━━━━━━━━━━━━━━━");
+  lines.push("━━━━━━━━━");
 
   // Призыв к действию
   lines.push(`🛒 <b>Попробовать новинку!</b>`);
@@ -467,7 +467,7 @@ export function buildSaleMessage(
     lines.push("");
   }
 
-  lines.push("━━━━━━━━━━━━━━━━━━━━");
+  lines.push("━━━━━━━━━");
   lines.push("<b>🎯 Товары по акции:</b>");
   lines.push("");
 
@@ -486,7 +486,7 @@ export function buildSaleMessage(
     lines.push("");
   });
 
-  lines.push("━━━━━━━━━━━━━━━━━━━━");
+  lines.push("━━━━━━━━━");
 
   if (endDate) {
     const endDateStr = new Date(endDate).toLocaleDateString("ru-RU", {
