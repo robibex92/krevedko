@@ -66,7 +66,23 @@ router.get("/public/reviews", async (req, res) => {
 router.post(
   "/public/reviews",
   requireAuth,
+  (req, res, next) => {
+    console.log("[public-reviews] Before reviewUpload middleware");
+    next();
+  },
   reviewUpload.array("images", 5),
+  (req, res, next) => {
+    console.log("[public-reviews] After reviewUpload middleware");
+    console.log(
+      "[public-reviews] req.files:",
+      req.files ? req.files.length : "null"
+    );
+    console.log(
+      "[public-reviews] req.file:",
+      req.file ? req.file.path : "null"
+    );
+    next();
+  },
   async (req, res) => {
     const prisma = req.app.locals.prisma;
     try {

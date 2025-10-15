@@ -951,7 +951,7 @@ export async function sendReviewToChat(prisma, review, user) {
       // Только текст
       await sendTelegramMessage(settings.chatId, messageText, {
         threadId: settings.threadId,
-        parseMode: "HTML",
+        parse_mode: "HTML",
       });
     } else if (images.length === 1) {
       // Одно изображение
@@ -962,7 +962,7 @@ export async function sendReviewToChat(prisma, review, user) {
       );
       await sendTelegramPhoto(settings.chatId, imagePath, messageText, {
         threadId: settings.threadId,
-        parseMode: "HTML",
+        parse_mode: "HTML",
       });
     } else {
       // Несколько изображений - отправляем как медиа-группу
@@ -978,7 +978,7 @@ export async function sendReviewToChat(prisma, review, user) {
       try {
         await sendTelegramMediaGroup(settings.chatId, mediaGroup, {
           threadId: settings.threadId,
-          parseMode: "HTML",
+          parse_mode: "HTML",
         });
       } catch (mediaGroupError) {
         console.warn(
