@@ -43,6 +43,12 @@ import { rateLimiters } from "./middleware/rateLimit.js";
 import { sanitizeInput } from "./middleware/inputSanitization.js";
 import { securityLogger } from "./middleware/securityLogger.js";
 import { requestIdMiddleware, requestLogger } from "./middleware/requestId.js";
+import { OrderAutoCompletionCron } from "./services/OrderAutoCompletionCron.js";
+import { 
+  securityAuditMiddleware, 
+  suspiciousActivityMiddleware,
+  ipWhitelistMiddleware 
+} from "./middleware/securityAudit.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -145,10 +151,14 @@ app.use(securityLogger);
 // 2. Input sanitization (очистка входных данных от XSS и injection)
 app.use(sanitizeInput);
 
-// 3. Idempotency protection (защита от дублирования запросов)
+// 3. Security audit and suspicious activity detection
+app.use(securityAuditMiddleware);
+app.use(suspiciousActivityMiddleware);
+
+// 4. Idempotency protection (защита от дублирования запросов)
 app.use(idempotencyMiddleware());
 
-// 4. Rate limiting (защита от DDoS и spam)
+// 5. Rate limiting (защита от DDoS и spam)
 // Строгий лимит только для аутентификации (защита от брутфорса)
 app.use("/api/auth/login", rateLimiters.auth);
 app.use("/api/auth/register", rateLimiters.auth);
@@ -303,11 +313,20 @@ cleanupInterval = setInterval(
   6 * 60 * 60 * 1000
 ); // 6 hours
 
+// Order auto-completion cron job
+const orderAutoCompletionCron = new OrderAutoCompletionCron();
+
 // Initial cleanup on startup (с задержкой 10 секунд для подключения к БД)
 setTimeout(() => {
   cleanupExpiredIdempotencyKeys(prisma).catch((err) =>
     console.error("[security] Initial cleanup failed:", err)
   );
+
+  // Запускаем cron job для автоматического завершения заказов
+  orderAutoCompletionCron.start({
+    intervalHours: 24, // Проверяем каждый день
+    runAtHour: 2, // В 2:00 ночи
+  });
 }, 10000);
 
 async function shutdown(signal) {
@@ -321,6 +340,8 @@ async function shutdown(signal) {
       clearInterval(cleanupInterval);
       console.log("[security] Cleanup processor stopped");
     }
+    orderAutoCompletionCron.stop();
+    console.log("[order-auto-completion] Cron job stopped");
     await redisService.disconnect();
     await prisma.$disconnect();
     server.close(() => {

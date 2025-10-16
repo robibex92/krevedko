@@ -6,7 +6,7 @@ const JWT_ACCESS_SECRET =
   process.env.JWT_ACCESS_SECRET || "dev_access_secret_change_me";
 const JWT_REFRESH_SECRET =
   process.env.JWT_REFRESH_SECRET || "dev_refresh_secret_change_me";
-const JWT_ACCESS_TTL = process.env.JWT_ACCESS_TTL || "24h"; // 24 часа - удобнее для пользователей
+const JWT_ACCESS_TTL = process.env.JWT_ACCESS_TTL || "2h"; // 2 часа - более безопасно
 const JWT_REFRESH_TTL = process.env.JWT_REFRESH_TTL || "30d";
 const NODE_ENV = process.env.NODE_ENV || "development";
 

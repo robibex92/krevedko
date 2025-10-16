@@ -139,9 +139,10 @@ export class OrderController extends BaseController {
       req.body?.collection_id ?? req.body?.collectionId;
 
     // Resolve target collection
-    const collection = await this.collectionService.resolveCollectionSelection(
-      targetCollectionId
-    );
+    const collection =
+      await this.collectionService.resolveCollectionSelection(
+        targetCollectionId
+      );
 
     const result = await this.orderService.repeatOrder(
       orderId,
@@ -150,6 +151,34 @@ export class OrderController extends BaseController {
     );
 
     return this.success(res, result, "Items added to cart");
+  }
+
+  /**
+   * Cancel order
+   * PATCH /api/orders/:id/cancel
+   */
+  async cancelOrder(req, res) {
+    const userId = this.getUserId(req);
+    const orderId = Number(req.params.id);
+
+    // Проверяем, что заказ принадлежит пользователю
+    const order = await this.orderService.getOrderDetails(orderId, userId);
+
+    // Проверяем, что заказ можно отменить (только SUBMITTED статус)
+    if (order.status !== "SUBMITTED") {
+      return this.badRequest(
+        res,
+        "Заказ можно отменить только в статусе 'Ожидает оплаты'"
+      );
+    }
+
+    // Отменяем заказ
+    const cancelledOrder = await this.orderService.updateStatus(
+      orderId,
+      "CANCELLED"
+    );
+
+    return this.success(res, { order: cancelledOrder }, "Заказ отменен");
   }
 
   /**

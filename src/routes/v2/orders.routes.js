@@ -34,6 +34,11 @@ export function createOrderRoutes(container) {
     requireAuth,
     asyncHandler(orderController.repeatOrder)
   );
+  router.patch(
+    "/orders/:id/cancel",
+    requireAuth,
+    asyncHandler(orderController.cancelOrder)
+  );
 
   // Guest order endpoint (no auth required)
   router.post("/orders/guest", asyncHandler(orderController.createGuestOrder));
