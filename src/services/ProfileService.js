@@ -8,12 +8,24 @@ export class ProfileService {
   constructor(userRepository, orderRepository) {
     this.userRepo = userRepository;
     this.orderRepo = orderRepository;
+    this.profileCache = new Map(); // Кэш профилей
+    this.cacheTimeout = 5 * 60 * 1000; // 5 минут
   }
 
   /**
    * Get user profile with orders
    */
   async getProfile(userId) {
+    // Проверяем кэш
+    const cacheKey = `profile_${userId}`;
+    const cached = this.profileCache.get(cacheKey);
+    if (cached && Date.now() - cached.timestamp < this.cacheTimeout) {
+      console.log(`[ProfileService] Using cached profile for user ${userId}`);
+      return cached.data;
+    }
+
+    console.log(`[ProfileService] Loading fresh profile for user ${userId}`);
+    
     // Fetch user and orders in parallel
     const [user, orders] = await Promise.all([
       this.userRepo.prisma.user.findUnique({
@@ -65,7 +77,7 @@ export class ProfileService {
       cancelled: mappedOrders.filter((o) => o.status === "CANCELLED"),
     };
 
-    return {
+    const profileData = {
       user,
       orders: orderGroups,
       summary: {
@@ -75,6 +87,23 @@ export class ProfileService {
         cancelled: orderGroups.cancelled.length,
       },
     };
+
+    // Сохраняем в кэш
+    this.profileCache.set(cacheKey, {
+      data: profileData,
+      timestamp: Date.now(),
+    });
+
+    return profileData;
+  }
+
+  /**
+   * Clear profile cache for user
+   */
+  clearProfileCache(userId) {
+    const cacheKey = `profile_${userId}`;
+    this.profileCache.delete(cacheKey);
+    console.log(`[ProfileService] Cleared cache for user ${userId}`);
   }
 
   /**
