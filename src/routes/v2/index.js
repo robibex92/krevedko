@@ -21,6 +21,7 @@ import { createWatermarkRoutes } from "./watermark.routes.js";
 import { createPublicRoutes } from "./public.routes.js";
 import { createOrderAutoCompletionRoutes } from "./order-auto-completion.routes.js";
 import { createAdminRoleManagementRoutes } from "./admin-role-management.routes.js";
+import { createOrderManagementRoutes } from "./order-management.routes.js";
 
 /**
  * Create all v2 routes with new architecture
@@ -59,6 +60,7 @@ export function createV2Routes(container) {
     createOrderAutoCompletionRoutes()
   );
   router.use("/admin/roles", createAdminRoleManagementRoutes());
+  router.use(createOrderManagementRoutes(container));
   router.use(createWatermarkRoutes(container));
 
   return router;

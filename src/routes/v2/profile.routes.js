@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { asyncHandler } from "../../core/middleware/asyncHandler.js";
 import { requireAuth } from "../../middleware/auth.js";
+import { softValidationProfile } from "../../middleware/softValidation.js";
 
 /**
  * Create profile routes
@@ -19,6 +20,7 @@ export function createProfileRoutes(container) {
   router.patch(
     "/profile",
     requireAuth,
+    softValidationProfile,
     asyncHandler(profileController.updateProfile)
   );
 

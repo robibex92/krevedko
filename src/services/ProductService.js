@@ -330,7 +330,7 @@ export class ProductService {
   async getProductsWithCollectionOverrides(targetCollections) {
     // Get all active products
     const activeProducts = await this.productRepo.findActive({
-      orderBy: { id: "asc" },
+      orderBy: { id: "desc" },
     });
 
     const collectionsPayload = [];

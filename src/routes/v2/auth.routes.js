@@ -1,6 +1,11 @@
 import { Router } from "express";
 import { asyncHandler } from "../../core/middleware/asyncHandler.js";
 import { requireAuth } from "../../middleware/auth.js";
+import {
+  softValidationRegister,
+  softValidationLogin,
+  softValidationProfile,
+} from "../../middleware/softValidation.js";
 
 /**
  * Create auth routes
@@ -10,8 +15,16 @@ export function createAuthRoutes(container) {
   const authController = container.resolve("authController");
 
   // Public routes
-  router.post("/register", asyncHandler(authController.register));
-  router.post("/login", asyncHandler(authController.login));
+  router.post(
+    "/register",
+    softValidationRegister,
+    asyncHandler(authController.register)
+  );
+  router.post(
+    "/login",
+    softValidationLogin,
+    asyncHandler(authController.login)
+  );
   router.post("/logout", asyncHandler(authController.logout));
   router.get("/me", asyncHandler(authController.me));
   router.post("/refresh", asyncHandler(authController.refresh));

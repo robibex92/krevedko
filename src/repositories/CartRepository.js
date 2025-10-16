@@ -13,7 +13,7 @@ export class CartRepository extends BaseRepository {
       { userId, collectionId },
       {
         include: { product: true },
-        orderBy: { id: "asc" },
+        orderBy: { id: "desc" },
         ...options,
       }
     );
@@ -27,7 +27,7 @@ export class CartRepository extends BaseRepository {
       { userId },
       {
         include: { product: true, collection: true },
-        orderBy: { id: "asc" },
+        orderBy: { id: "desc" },
         ...options,
       }
     );

@@ -242,4 +242,184 @@ export class OrderController extends BaseController {
 
     return this.success(res, { order }, "Guest order created successfully");
   }
+
+  /**
+   * Частичная отмена заказа
+   * POST /api/orders/:id/partial-cancel
+   */
+  async partialCancelOrder(req, res) {
+    const userId = this.getUserId(req);
+    const orderId = Number(req.params.id);
+    const { cancelItems } = req.body;
+
+    if (!cancelItems || !Array.isArray(cancelItems)) {
+      return this.badRequest(res, "Необходимо указать товары для отмены");
+    }
+
+    const result = await this.orderService.partialCancelOrder(
+      orderId,
+      userId,
+      cancelItems
+    );
+
+    return this.success(res, result, "Частичная отмена заказа выполнена");
+  }
+
+  /**
+   * Изменение товаров в заказе
+   * PATCH /api/orders/:id/items
+   */
+  async editOrderItems(req, res) {
+    const userId = this.getUserId(req);
+    const orderId = Number(req.params.id);
+    const { changes } = req.body;
+
+    if (!changes || !Array.isArray(changes)) {
+      return this.badRequest(res, "Необходимо указать изменения");
+    }
+
+    const result = await this.orderService.editOrderItems(
+      orderId,
+      userId,
+      changes
+    );
+
+    return this.success(res, result, "Заказ обновлен");
+  }
+
+  /**
+   * Получение заказа для редактирования
+   * GET /api/orders/:id/edit
+   */
+  async getOrderForEdit(req, res) {
+    const userId = this.getUserId(req);
+    const orderId = Number(req.params.id);
+
+    const order = await this.orderService.getOrderForEdit(orderId, userId);
+
+    return this.success(res, { order });
+  }
+
+  /**
+   * История изменений заказа
+   * GET /api/orders/:id/history
+   */
+  async getOrderHistory(req, res) {
+    const userId = this.getUserId(req);
+    const orderId = Number(req.params.id);
+
+    const history = await this.orderService.getOrderHistory(orderId, userId);
+
+    return this.success(res, { history });
+  }
+
+  /**
+   * Добавление товара в заказ
+   * POST /api/orders/:id/items
+   */
+  async addItemToOrder(req, res) {
+    const userId = this.getUserId(req);
+    const orderId = Number(req.params.id);
+    const { productId, quantity } = req.body;
+
+    if (!productId || !quantity) {
+      return this.badRequest(res, "Необходимо указать товар и количество");
+    }
+
+    const result = await this.orderService.addItemToOrder(
+      orderId,
+      userId,
+      productId,
+      quantity
+    );
+
+    return this.success(res, result, "Товар добавлен в заказ");
+  }
+
+  /**
+   * Удаление товара из заказа
+   * DELETE /api/orders/:id/items/:itemId
+   */
+  async removeItemFromOrder(req, res) {
+    const userId = this.getUserId(req);
+    const orderId = Number(req.params.id);
+    const itemId = Number(req.params.itemId);
+
+    const result = await this.orderService.removeItemFromOrder(
+      orderId,
+      userId,
+      itemId
+    );
+
+    return this.success(res, result, "Товар удален из заказа");
+  }
+
+  /**
+   * Изменение статуса заказа (только админы)
+   * PATCH /api/orders/:id/status
+   */
+  async updateOrderStatus(req, res) {
+    const orderId = Number(req.params.id);
+    const { status, reason } = req.body;
+
+    if (!status) {
+      return this.badRequest(res, "Необходимо указать статус");
+    }
+
+    const result = await this.orderService.updateOrderStatus(
+      orderId,
+      status,
+      reason
+    );
+
+    return this.success(res, result, "Статус заказа обновлен");
+  }
+
+  /**
+   * Получение доступных действий для заказа
+   * GET /api/orders/:id/actions
+   */
+  async getOrderActions(req, res) {
+    const userId = this.getUserId(req);
+    const orderId = Number(req.params.id);
+
+    const actions = await this.orderService.getOrderActions(orderId, userId);
+
+    return this.success(res, { actions });
+  }
+
+  /**
+   * Отправка уведомления по заказу
+   * POST /api/orders/:id/notify
+   */
+  async sendOrderNotification(req, res) {
+    const userId = this.getUserId(req);
+    const orderId = Number(req.params.id);
+    const { message } = req.body;
+
+    if (!message) {
+      return this.badRequest(res, "Необходимо указать сообщение");
+    }
+
+    const result = await this.orderService.sendOrderNotification(
+      orderId,
+      userId,
+      message
+    );
+
+    return this.success(res, result, "Уведомление отправлено");
+  }
+
+  /**
+   * Статистика заказа
+   * GET /api/orders/:id/stats
+   */
+  async getOrderStats(req, res) {
+    const userId = this.getUserId(req);
+    const orderId = Number(req.params.id);
+
+    const stats = await this.orderService.getOrderStats(orderId, userId);
+
+    return this.success(res, { stats });
+  }
 }

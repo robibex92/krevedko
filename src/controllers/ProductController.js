@@ -19,7 +19,7 @@ export class ProductController extends BaseController {
    */
   async getAllProducts(req, res) {
     const products = await this.productService.getAllProducts({
-      orderBy: { id: "asc" },
+      orderBy: { id: "desc" },
     });
 
     // Применяем DTO для админки (все поля)
