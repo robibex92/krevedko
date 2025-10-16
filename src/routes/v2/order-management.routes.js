@@ -10,7 +10,12 @@ export function createOrderManagementRoutes(container) {
   const orderController = container.resolve("orderController");
 
   // Все роуты требуют аутентификации
-  router.use(requireAuth);
+  // router.use(requireAuth); // Временно отключено для отладки
+
+  // Тестовый маршрут
+  router.get("/test", (req, res) => {
+    res.json({ message: "Order management routes are working!" });
+  });
 
   // Частичная отмена заказа
   router.post(

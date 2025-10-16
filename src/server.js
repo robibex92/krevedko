@@ -44,10 +44,10 @@ import { sanitizeInput } from "./middleware/inputSanitization.js";
 import { securityLogger } from "./middleware/securityLogger.js";
 import { requestIdMiddleware, requestLogger } from "./middleware/requestId.js";
 import { OrderAutoCompletionCron } from "./services/OrderAutoCompletionCron.js";
-import { 
-  securityAuditMiddleware, 
+import {
+  securityAuditMiddleware,
   suspiciousActivityMiddleware,
-  ipWhitelistMiddleware 
+  ipWhitelistMiddleware,
 } from "./middleware/securityAudit.js";
 
 const __filename = fileURLToPath(import.meta.url);

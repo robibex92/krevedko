@@ -40,6 +40,23 @@ export function createOrderRoutes(container) {
     asyncHandler(orderController.cancelOrder)
   );
 
+  // Order management endpoints
+  router.get(
+    "/orders/:id/edit",
+    requireAuth,
+    asyncHandler(orderController.getOrderForEdit)
+  );
+  router.patch(
+    "/orders/:id/items",
+    requireAuth,
+    asyncHandler(orderController.editOrderItems)
+  );
+  router.post(
+    "/orders/:id/partial-cancel",
+    requireAuth,
+    asyncHandler(orderController.partialCancelOrder)
+  );
+
   // Guest order endpoint (no auth required)
   router.post("/orders/guest", asyncHandler(orderController.createGuestOrder));
 
