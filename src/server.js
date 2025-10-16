@@ -267,7 +267,7 @@ app.use(notFoundHandler);
 app.use(errorHandler);
 
 // Start server
-const PORT = process.env.PORT || 4004; // Временно изменили порт
+const PORT = process.env.PORT || 4002;
 const HOST = process.env.HOST || "0.0.0.0";
 const server = app.listen(PORT, HOST, () => {
   console.log(`[server] started on ${PORT}`);

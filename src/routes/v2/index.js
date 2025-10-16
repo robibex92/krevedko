@@ -21,7 +21,6 @@ import { createWatermarkRoutes } from "./watermark.routes.js";
 import { createPublicRoutes } from "./public.routes.js";
 import { createOrderAutoCompletionRoutes } from "./order-auto-completion.routes.js";
 import { createAdminRoleManagementRoutes } from "./admin-role-management.routes.js";
-import { createOrderManagementRoutes } from "./order-management.routes.js";
 
 /**
  * Create all v2 routes with new architecture
@@ -60,21 +59,6 @@ export function createV2Routes(container) {
     createOrderAutoCompletionRoutes()
   );
   router.use("/admin/roles", createAdminRoleManagementRoutes());
-
-  // Добавляем логирование для отладки
-  console.log("🔧 Registering order management routes...");
-  try {
-    const orderManagementRoutes = createOrderManagementRoutes(container);
-    router.use(orderManagementRoutes);
-    console.log("✅ Order management routes registered successfully");
-  } catch (error) {
-    console.error("❌ Error registering order management routes:", error);
-  }
-
-  // Временный тестовый маршрут прямо здесь
-  router.get("/test-direct", (req, res) => {
-    res.json({ message: "Direct test route is working!" });
-  });
 
   router.use(createWatermarkRoutes(container));
 
