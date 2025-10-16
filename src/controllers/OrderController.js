@@ -266,28 +266,6 @@ export class OrderController extends BaseController {
   }
 
   /**
-   * Частичная отмена заказа
-   * POST /api/orders/:id/partial-cancel
-   */
-  async partialCancelOrder(req, res) {
-    const userId = this.getUserId(req);
-    const orderId = Number(req.params.id);
-    const { cancelItems } = req.body;
-
-    if (!cancelItems || !Array.isArray(cancelItems)) {
-      return this.badRequest(res, "Необходимо указать товары для отмены");
-    }
-
-    const result = await this.orderService.partialCancelOrder(
-      orderId,
-      userId,
-      cancelItems
-    );
-
-    return this.success(res, result, "Частичная отмена заказа выполнена");
-  }
-
-  /**
    * Изменение товаров в заказе
    * PATCH /api/orders/:id/items
    */

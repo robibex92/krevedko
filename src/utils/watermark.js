@@ -17,10 +17,18 @@ function createWatermarkSVG(text = "Ля Креведко", options = {}) {
     rotation = -15,
     fontFamily = "Arial, sans-serif",
     fontWeight = "bold",
+    imageWidth = 400,
+    imageHeight = 200,
   } = options;
 
+  // Вычисляем размеры SVG на основе размера изображения
+  const svgWidth = Math.max(400, imageWidth);
+  const svgHeight = Math.max(200, imageHeight);
+  const centerX = svgWidth / 2;
+  const centerY = svgHeight / 2;
+
   const svg = `
-    <svg width="400" height="200" xmlns="http://www.w3.org/2000/svg">
+    <svg width="${svgWidth}" height="${svgHeight}" xmlns="http://www.w3.org/2000/svg">
       <defs>
         <style>
           .watermark-text {
@@ -34,8 +42,8 @@ function createWatermarkSVG(text = "Ля Креведко", options = {}) {
           }
         </style>
       </defs>
-      <g transform="rotate(${rotation} 200 100)">
-        <text x="200" y="100" class="watermark-text">${text}</text>
+      <g transform="rotate(${rotation} ${centerX} ${centerY})">
+        <text x="${centerX}" y="${centerY}" class="watermark-text">${text}</text>
       </g>
     </svg>
   `;
@@ -82,7 +90,20 @@ export async function addWatermarkToImage(inputPath, outputPath, options = {}) {
 
     // Получаем метаданные изображения
     const metadata = await sharpInstance.metadata();
-    const { width, height } = metadata;
+    let { width, height, orientation } = metadata;
+
+    // Исправляем ориентацию для изображений с iPhone
+    if (orientation && orientation > 1) {
+      console.log(
+        `Correcting orientation: ${orientation} for image ${inputPath}`
+      );
+      sharpInstance = sharpInstance.rotate(); // Автоматически поворачивает на основе EXIF
+
+      // Получаем новые размеры после поворота
+      const rotatedMetadata = await sharpInstance.metadata();
+      width = rotatedMetadata.width;
+      height = rotatedMetadata.height;
+    }
 
     // Адаптивный размер шрифта в зависимости от размера изображения
     const adaptiveFontSize = Math.max(24, Math.min(72, Math.floor(width / 15)));
@@ -93,6 +114,8 @@ export async function addWatermarkToImage(inputPath, outputPath, options = {}) {
       opacity,
       color,
       rotation,
+      imageWidth: width,
+      imageHeight: height,
     });
 
     // Вычисляем позицию водяного знака

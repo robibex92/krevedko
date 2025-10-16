@@ -307,7 +307,7 @@ function watermarkMiddleware(uploadMiddleware) {
       try {
         await processImageWithWatermark(file.path, file.path, {
           text: "Ля Креведко",
-          opacity: 0.5,
+          opacity: 0.4, // Уменьшаем непрозрачность для лучшей видимости
           color: "#ffffff",
           rotation: -15,
           position: "center",
