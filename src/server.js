@@ -251,6 +251,11 @@ app.post("/api/test-upload", productUploadBase.single("image"), (req, res) => {
 // NEW V2 ROUTES (with layered architecture)
 app.use("/api", createV2Routes(container));
 
+// Временный тестовый маршрут для отладки
+app.get("/api/test-server", (req, res) => {
+  res.json({ message: "Server is working with new changes!", timestamp: new Date().toISOString() });
+});
+
 // OAuth routes (Google, Yandex, Mail.ru)
 app.use("/api", createOAuthRoutes(container));
 
@@ -262,7 +267,7 @@ app.use(notFoundHandler);
 app.use(errorHandler);
 
 // Start server
-const PORT = process.env.PORT || 4002;
+const PORT = process.env.PORT || 4004; // Временно изменили порт
 const HOST = process.env.HOST || "0.0.0.0";
 const server = app.listen(PORT, HOST, () => {
   console.log(`[server] started on ${PORT}`);
