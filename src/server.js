@@ -149,14 +149,26 @@ app.use(sanitizeInput);
 app.use(idempotencyMiddleware());
 
 // 4. Rate limiting (защита от DDoS и spam)
-// Строгий лимит для аутентификации (защита от брутфорса)
+// Строгий лимит только для аутентификации (защита от брутфорса)
 app.use("/api/auth/login", rateLimiters.auth);
 app.use("/api/auth/register", rateLimiters.auth);
 // Средний лимит для создания заказов
 app.use("/api/orders", rateLimiters.orders);
 app.use("/api/guest/orders", rateLimiters.orders);
-// Общий лимит для всего API
-app.use("/api", rateLimiters.api);
+// Мягкий лимит для GET запросов (чтение данных)
+app.use((req, res, next) => {
+  if (req.method === "GET") {
+    return rateLimiters.read(req, res, next);
+  }
+  next();
+});
+// Более строгий лимит для POST/PUT/DELETE запросов (изменение данных)
+app.use((req, res, next) => {
+  if (["POST", "PUT", "DELETE", "PATCH"].includes(req.method)) {
+    return rateLimiters.write(req, res, next);
+  }
+  next();
+});
 // ===== END SECURITY MIDDLEWARES =====
 
 // Static files
