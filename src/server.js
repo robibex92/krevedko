@@ -10,25 +10,39 @@ import { fileURLToPath } from "url";
 import fs from "fs";
 import rateLimit from "express-rate-limit";
 import { PrismaClient } from "@prisma/client";
-import authRouter from "./routes/auth.js";
-import publicRouter from "./routes/public.js";
+import passport from "passport";
+
+// New architecture imports
+import { configureContainer } from "./config/container.config.js";
+import {
+  errorHandler,
+  notFoundHandler,
+} from "./core/middleware/errorHandler.js";
+import { createV2Routes, createAuthRoutes } from "./routes/v2/index.js";
+import { createOAuthRoutes } from "./routes/v2/oauth.routes.js";
+
+// OAuth strategies
+import { configureGoogleStrategy } from "./auth/strategies/google.strategy.js";
+import { configureYandexStrategy } from "./auth/strategies/yandex.strategy.js";
+import { configureMailRuStrategy } from "./auth/strategies/mailru.strategy.js";
+
 import { csrfIssue, csrfProtect } from "./middleware/csrf.js";
 import { requireAuth, requireAdmin } from "./middleware/auth.js";
-import { errorHandler } from "./middleware/error.js";
-import { apiFetchJson } from "./services/api.js";
-import collectionsRouter from "./routes/collections.js";
-import cartRouter from "./routes/cart.js";
-import ordersRouter from "./routes/orders.js";
-import favoritesRouter from "./routes/favorites.js";
-import profileRouter from "./routes/profile.js";
-import publicReviewsRouter from "./routes/public-reviews.js";
-import productFeedbackRouter from "./routes/product-feedback.js";
 import { productUploadBase } from "./services/uploads.js";
-import referralRouter from "./routes/referral.js";
-import adminRouter from "./routes/admin.js";
-import notificationsRouter from "./routes/notifications.js";
-import verifyEmailRouter from "./routes/verify-email.js";
 import { processMessageQueue } from "./services/telegram-bot.js";
+
+// Security middlewares
+import {
+  idempotencyMiddleware,
+  cleanupExpiredIdempotencyKeys,
+} from "./middleware/idempotency.js";
+
+// Redis service
+import redisService from "./services/redis.service.js";
+import { rateLimiters } from "./middleware/rateLimit.js";
+import { sanitizeInput } from "./middleware/inputSanitization.js";
+import { securityLogger } from "./middleware/securityLogger.js";
+import { requestIdMiddleware, requestLogger } from "./middleware/requestId.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -36,17 +50,27 @@ const __dirname = path.dirname(__filename);
 // Read env with sensible defaults
 const ENV = process.env;
 const NODE_ENV = ENV.NODE_ENV || "development";
-const UPLOAD_LIMIT_MB = parseInt(ENV.UPLOAD_LIMIT_MB || "5", 10);
 const API_URL = ENV.API_URL || null;
 
 const app = express();
 const prisma = new PrismaClient();
-app.locals.prisma = prisma;
-app.locals.csrfSecrets = new Map(); // sid -> secret
 
-app.locals.api = { baseUrl: API_URL, fetchJson: apiFetchJson };
+// Configure DI Container (prisma is now only accessible through DI)
+const container = configureContainer(prisma);
 
-// Ensure runtime folders exist (uploads, session store)
+// Configure Passport.js OAuth strategies
+const oauthService = container.resolve("oauthService");
+configureGoogleStrategy(passport, oauthService);
+configureYandexStrategy(passport, oauthService);
+configureMailRuStrategy(passport, oauthService);
+
+// App locals (legacy support - will be removed gradually)
+app.locals.prisma = prisma; // ✅ Required for legacy routes (auth, cart, favorites, etc.)
+app.locals.container = container;
+app.locals.csrfSecrets = new Map();
+app.locals.api = { baseUrl: API_URL, fetchJson: null };
+
+// Ensure runtime folders exist
 const uploadRoot = path.resolve(__dirname, "../uploads");
 const uploadProductsDir = path.join(uploadRoot, "products");
 const uploadPaymentsDir = path.join(uploadRoot, "payments");
@@ -61,7 +85,6 @@ fs.mkdirSync(uploadRecipesDir, { recursive: true });
 
 // Core middlewares
 app.set("trust proxy", 1);
-
 app.use(morgan("dev"));
 app.use(compression());
 
@@ -87,11 +110,14 @@ app.use(
   })
 );
 
-// Middleware
+// Body parsing
 app.use(express.json({ limit: "50mb" }));
+app.use(express.urlencoded({ limit: "50mb", extended: true }));
+
+// CORS
 app.use(
   cors({
-    origin: process.env.FRONTEND_ORIGIN, // https://test.sibroot.ru
+    origin: process.env.FRONTEND_ORIGIN,
     credentials: true,
   })
 );
@@ -102,8 +128,38 @@ app.options(
     credentials: true,
   })
 );
+
 app.use(cookieParser());
-app.use(express.urlencoded({ limit: "50mb", extended: true }));
+
+// Initialize Passport (for OAuth)
+app.use(passport.initialize());
+
+// ===== SECURITY MIDDLEWARES =====
+// 0. Request ID (должен быть самым первым для трейсинга)
+app.use(requestIdMiddleware);
+app.use(requestLogger);
+
+// 1. Security logging (должен быть первым для логирования всех запросов)
+app.use(securityLogger);
+
+// 2. Input sanitization (очистка входных данных от XSS и injection)
+app.use(sanitizeInput);
+
+// 3. Idempotency protection (защита от дублирования запросов)
+app.use(idempotencyMiddleware());
+
+// 4. Rate limiting (защита от DDoS и spam)
+// Строгий лимит для аутентификации (защита от брутфорса)
+app.use("/api/auth/login", rateLimiters.auth);
+app.use("/api/auth/register", rateLimiters.auth);
+// Средний лимит для создания заказов
+app.use("/api/orders", rateLimiters.orders);
+app.use("/api/guest/orders", rateLimiters.orders);
+// Общий лимит для всего API
+app.use("/api", rateLimiters.api);
+// ===== END SECURITY MIDDLEWARES =====
+
+// Static files
 app.use(
   "/uploads",
   express.static(uploadRoot, {
@@ -111,51 +167,43 @@ app.use(
     maxAge: "1d",
     fallthrough: true,
     setHeaders: (res, filePath) => {
-      // Allow cross-origin embedding of images/files
       res.setHeader("Cross-Origin-Resource-Policy", "cross-origin");
     },
   })
 );
 
-// Rate limiters
-const authLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 100,
-  standardHeaders: true,
-  legacyHeaders: false,
-});
-const apiLimiter = rateLimit({
-  windowMs: 60 * 1000,
-  max: 1000,
-  standardHeaders: true,
-  legacyHeaders: false,
-});
-app.use("/api/auth", authLimiter);
-app.use("/api", apiLimiter);
+// Health check endpoints (должны быть ДО middleware безопасности)
+import healthRouter from "./routes/health.js";
+app.use("/", healthRouter);
 
-// CSRF endpoints/middleware
+// CSRF
 app.get("/api/csrf", csrfIssue);
-
-// Apply CSRF protection with exception for auth endpoints that don't rely on session CSRF
 app.use((req, res, next) => {
-  // Skip CSRF for auth endpoints that use JWT or secure refresh cookie
   if (
     req.path === "/api/auth/refresh" ||
     req.path === "/api/auth/login" ||
     req.path === "/api/auth/register" ||
     req.path === "/api/auth/telegram/verify" ||
     req.path === "/api/auth/logout" ||
-    req.path === "/api/test-upload"
+    req.path === "/api/test-upload" ||
+    req.path.startsWith("/api/auth/oauth/") || // Skip CSRF for OAuth
+    req.path.startsWith("/health") // Skip CSRF for health checks
   ) {
     return next();
   }
   csrfProtect(req, res, next);
 });
 
-// Public and auth routers
-app.use("/api", publicRouter);
-app.use("/api", verifyEmailRouter);
-app.use("/api/auth", authRouter);
+// Public routes (MIGRATED to v2)
+// app.use("/api", publicRouter);
+// app.use("/api", verifyEmailRouter);
+
+// NEW AUTH ROUTES (v2 - migrated to layered architecture)
+app.use("/api/auth", createAuthRoutes(container));
+
+// Email verification endpoint (GET /api/verify-email)
+const authController = container.resolve("authController");
+app.get("/api/verify-email", authController.verifyEmail);
 
 // Example secured pings
 app.get("/api/secure/ping", requireAuth, (_req, res) => res.json({ ok: true }));
@@ -163,56 +211,46 @@ app.get("/api/admin/ping", requireAuth, requireAdmin, (_req, res) =>
   res.json({ ok: true, role: "ADMIN" })
 );
 
-// Test upload endpoint to validate file uploads independently of admin flows
+// Test upload endpoint
 app.post("/api/test-upload", productUploadBase.single("image"), (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ error: "NO_FILE" });
-    console.log("[test-upload] file received", {
-      filename: req.file.filename,
-      mimetype: req.file.mimetype,
-      size: req.file.size,
-      path: req.file.path,
-    });
-    // Expose relative path under /uploads static mount
     const relPath = ["products", req.file.filename].join("/");
     res.json({
       ok: true,
       file: { ...req.file, relPath, url: `/uploads/${relPath}` },
+      message: "Image uploaded with watermark 'Ля Креведко'",
     });
   } catch (e) {
-    res
-      .status(500)
-      .json({ error: "TEST_UPLOAD_FAILED", message: e?.message || String(e) });
+    res.status(500).json({ error: "TEST_UPLOAD_FAILED", message: e?.message });
   }
 });
 
-// Domain routers
-app.use("/api", collectionsRouter);
-app.use("/api", cartRouter);
-app.use("/api", ordersRouter);
-app.use("/api", favoritesRouter);
-app.use("/api", profileRouter);
-app.use("/api", publicReviewsRouter);
-app.use("/api", productFeedbackRouter);
-app.use("/api", referralRouter);
-app.use("/api", notificationsRouter);
-app.use("/api", adminRouter);
+// NEW V2 ROUTES (with layered architecture)
+app.use("/api", createV2Routes(container));
 
-// Centralized error handler
+// OAuth routes (Google, Yandex, Mail.ru)
+app.use("/api", createOAuthRoutes(container));
+
+// OLD ROUTES (backward compatibility - MIGRATED to v2)
+// app.use("/api", adminRouter);
+
+// Error handlers (must be last)
+app.use(notFoundHandler);
 app.use(errorHandler);
 
-// Start server + graceful shutdown (env PORT)
+// Start server
 const PORT = process.env.PORT || 4002;
 const HOST = process.env.HOST || "0.0.0.0";
 const server = app.listen(PORT, HOST, () => {
   console.log(`[server] started on ${PORT}`);
+  console.log(`[server] New layered architecture enabled`);
 });
 
 // Telegram bot message queue processor
 let queueInterval = null;
 if (process.env.TELEGRAM_BOT_TOKEN) {
   console.log("[telegram-bot] Message queue processor enabled");
-  // Обрабатываем очередь каждые 10 секунд
   queueInterval = setInterval(async () => {
     try {
       if (!prisma) {
@@ -230,6 +268,36 @@ if (process.env.TELEGRAM_BOT_TOKEN) {
   );
 }
 
+// Initialize Redis (с задержкой после подключения к БД)
+setTimeout(async () => {
+  try {
+    await redisService.connect();
+  } catch (error) {
+    console.error("[redis] Failed to initialize:", error);
+  }
+}, 5000);
+
+// Periodic cleanup of expired idempotency keys (каждые 6 часов)
+let cleanupInterval = null;
+console.log("[security] Idempotency keys cleanup enabled");
+cleanupInterval = setInterval(
+  async () => {
+    try {
+      await cleanupExpiredIdempotencyKeys(prisma);
+    } catch (error) {
+      console.error("[security] Failed to cleanup idempotency keys:", error);
+    }
+  },
+  6 * 60 * 60 * 1000
+); // 6 hours
+
+// Initial cleanup on startup (с задержкой 10 секунд для подключения к БД)
+setTimeout(() => {
+  cleanupExpiredIdempotencyKeys(prisma).catch((err) =>
+    console.error("[security] Initial cleanup failed:", err)
+  );
+}, 10000);
+
 async function shutdown(signal) {
   try {
     console.log(`[server] Received ${signal}, shutting down...`);
@@ -237,6 +305,11 @@ async function shutdown(signal) {
       clearInterval(queueInterval);
       console.log("[telegram-bot] Queue processor stopped");
     }
+    if (cleanupInterval) {
+      clearInterval(cleanupInterval);
+      console.log("[security] Cleanup processor stopped");
+    }
+    await redisService.disconnect();
     await prisma.$disconnect();
     server.close(() => {
       console.log("[server] HTTP server closed");

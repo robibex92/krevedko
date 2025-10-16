@@ -4,6 +4,8 @@
  *
  * Использует простую in-memory стратегию с sliding window
  * Для production рекомендуется использовать Redis
+ *
+ * Для отключения в разработке: RATE_LIMIT_DISABLED=true
  */
 
 // In-memory хранилище (для простоты, в production лучше Redis)
@@ -53,6 +55,10 @@ export function rateLimitMiddleware(options = {}) {
   } = options;
 
   return (req, res, next) => {
+    // Отключаем rate limiting если установлена переменная окружения
+    if (process.env.RATE_LIMIT_DISABLED === "true") {
+      return next();
+    }
     const key = keyGenerator(req);
     const now = Date.now();
 
@@ -132,10 +138,10 @@ export function rateLimitMiddleware(options = {}) {
  */
 export const rateLimiters = {
   // Лимит для аутентификации (защита от брутфорса)
-  // 5 попыток за 1 минуту - не слишком строго, но защищает от атак
+  // Для разработки: 50 попыток за 1 минуту, для продакшена: 5 попыток
   auth: rateLimitMiddleware({
-    windowMs: 60 * 1000, // 1 минута (было 15 минут)
-    max: 5, // 5 попыток за 1 минуту
+    windowMs: 60 * 1000, // 1 минута
+    max: process.env.NODE_ENV === "production" ? 5 : 50, // 5 в продакшене, 50 в разработке
     message: "Слишком много попыток входа. Пожалуйста, повторите через минуту",
   }),
 
@@ -183,4 +189,12 @@ export function getRateLimitStats() {
   }
 
   return stats;
+}
+
+/**
+ * Очистить все rate limit записи (для разработки)
+ */
+export function clearRateLimitCache() {
+  requestCounts.clear();
+  console.log("[rate-limit] Cache cleared");
 }
