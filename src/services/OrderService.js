@@ -588,4 +588,166 @@ export class OrderService {
 
     return { migrated: result.count };
   }
+
+  /**
+   * Частичная отмена заказа
+   * @param {number} orderId - ID заказа
+   * @param {number} userId - ID пользователя
+   * @param {Array} cancelItems - Массив товаров для отмены
+   */
+  async partialCancelOrder(orderId, userId, cancelItems) {
+    // Проверяем, что заказ принадлежит пользователю
+    const order = await this.orderRepo.findByIdOrFail(orderId);
+    if (order.userId !== userId) {
+      throw new BusinessLogicError("Order not found", "ORDER_NOT_FOUND");
+    }
+
+    // Проверяем, что заказ можно отменить
+    if (order.status !== "SUBMITTED") {
+      throw new BusinessLogicError(
+        "Order cannot be cancelled",
+        "ORDER_CANNOT_BE_CANCELLED"
+      );
+    }
+
+    // Получаем товары заказа
+    const orderItems = await this.orderRepo.prisma.orderItem.findMany({
+      where: { orderId },
+      include: { product: true },
+    });
+
+    // Обновляем количество товаров
+    for (const cancelItem of cancelItems) {
+      const orderItem = orderItems.find(
+        (item) => item.productId === cancelItem.productId
+      );
+      if (!orderItem) {
+        throw new BusinessLogicError(
+          `Product ${cancelItem.productId} not found in order`,
+          "PRODUCT_NOT_FOUND"
+        );
+      }
+
+      const newQuantity = orderItem.quantityDecimal - cancelItem.quantity;
+      if (newQuantity <= 0) {
+        // Удаляем товар полностью
+        await this.orderRepo.prisma.orderItem.delete({
+          where: { id: orderItem.id },
+        });
+      } else {
+        // Обновляем количество
+        await this.orderRepo.prisma.orderItem.update({
+          where: { id: orderItem.id },
+          data: { quantityDecimal: newQuantity },
+        });
+      }
+    }
+
+    // Пересчитываем общую сумму заказа
+    const updatedItems = await this.orderRepo.prisma.orderItem.findMany({
+      where: { orderId },
+      include: { product: true },
+    });
+
+    const totalKopecks = updatedItems.reduce((sum, item) => {
+      return sum + item.quantityDecimal * item.product.priceKopecks;
+    }, 0);
+
+    // Обновляем заказ
+    const updatedOrder = await this.orderRepo.prisma.order.update({
+      where: { id: orderId },
+      data: { totalKopecks },
+      include: {
+        items: { include: { product: true } },
+        user: true,
+        collection: true,
+      },
+    });
+
+    return { order: updatedOrder };
+  }
+
+  /**
+   * Изменение товаров в заказе
+   * @param {number} orderId - ID заказа
+   * @param {number} userId - ID пользователя
+   * @param {Array} changes - Массив изменений
+   */
+  async editOrderItems(orderId, userId, changes) {
+    // Проверяем, что заказ принадлежит пользователю
+    const order = await this.orderRepo.findByIdOrFail(orderId);
+    if (order.userId !== userId) {
+      throw new BusinessLogicError("Order not found", "ORDER_NOT_FOUND");
+    }
+
+    // Проверяем, что заказ можно редактировать
+    if (order.status !== "SUBMITTED") {
+      throw new BusinessLogicError(
+        "Order cannot be edited",
+        "ORDER_CANNOT_BE_EDITED"
+      );
+    }
+
+    // Обновляем товары
+    for (const change of changes) {
+      if (change.quantity <= 0) {
+        // Удаляем товар
+        await this.orderRepo.prisma.orderItem.deleteMany({
+          where: { orderId, productId: change.productId },
+        });
+      } else {
+        // Обновляем количество
+        await this.orderRepo.prisma.orderItem.updateMany({
+          where: { orderId, productId: change.productId },
+          data: { quantityDecimal: change.quantity },
+        });
+      }
+    }
+
+    // Пересчитываем общую сумму заказа
+    const updatedItems = await this.orderRepo.prisma.orderItem.findMany({
+      where: { orderId },
+      include: { product: true },
+    });
+
+    const totalKopecks = updatedItems.reduce((sum, item) => {
+      return sum + item.quantityDecimal * item.product.priceKopecks;
+    }, 0);
+
+    // Обновляем заказ
+    const updatedOrder = await this.orderRepo.prisma.order.update({
+      where: { id: orderId },
+      data: { totalKopecks },
+      include: {
+        items: { include: { product: true } },
+        user: true,
+        collection: true,
+      },
+    });
+
+    return { order: updatedOrder };
+  }
+
+  /**
+   * Получение заказа для редактирования
+   * @param {number} orderId - ID заказа
+   * @param {number} userId - ID пользователя
+   */
+  async getOrderForEdit(orderId, userId) {
+    const order = await this.orderRepo.findByIdOrFail(orderId);
+    if (order.userId !== userId) {
+      throw new BusinessLogicError("Order not found", "ORDER_NOT_FOUND");
+    }
+
+    const orderWithItems = await this.orderRepo.prisma.order.findUnique({
+      where: { id: orderId },
+      include: {
+        items: { include: { product: true } },
+        user: true,
+        collection: true,
+      },
+    });
+
+    return { order: orderWithItems };
+  }
 }
