@@ -23,6 +23,16 @@ export class TelegramAdminController extends BaseController {
   };
 
   /**
+   * GET /api/public/categories/:id/products
+   * Get products for a category
+   */
+  getCategoryProducts = async (req, res) => {
+    const categoryId = this.getIdParam(req);
+    const result = await this.telegramService.getCategoryProducts(categoryId);
+    this.success(res, result);
+  };
+
+  /**
    * POST /api/admin/categories
    * Create category
    */

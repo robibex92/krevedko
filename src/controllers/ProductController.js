@@ -286,4 +286,13 @@ export class ProductController extends BaseController {
 
     return this.success(res, optimizedResult);
   }
+
+  /**
+   * Get product categories (public)
+   * GET /api/public/categories
+   */
+  async getCategories(req, res) {
+    const categories = await this.productService.getCategories();
+    return this.success(res, { categories });
+  }
 }

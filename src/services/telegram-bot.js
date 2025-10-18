@@ -1240,11 +1240,13 @@ export async function sendOrderNotificationToAdmin(prisma, order, user) {
     // Отправляем текстовое сообщение
     await sendTelegramMessage(adminChatId, messageText, { parse_mode: "HTML" });
 
-    // Генерируем и отправляем PDF фактуру
+    // PDF генерация временно отключена из-за проблем с зависимостями
+    // TODO: Включить после установки системных библиотек
+    /*
     try {
       const invoiceService = new InvoiceService();
       const pdfBuffer = await invoiceService.generateInvoicePDF(fullOrder);
-
+      
       // Отправляем PDF как документ
       await sendTelegramDocument(adminChatId, pdfBuffer, {
         filename: `invoice_${fullOrder.orderNumber || fullOrder.id}.pdf`,
@@ -1257,6 +1259,7 @@ export async function sendOrderNotificationToAdmin(prisma, order, user) {
       );
       // Не бросаем ошибку, так как основное уведомление уже отправлено
     }
+    */
   } catch (error) {
     console.error(
       `Failed to send order ${order.id} notification to admin:`,

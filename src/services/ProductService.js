@@ -474,4 +474,22 @@ export class ProductService {
       quickPickupRemoved: true,
     };
   }
+
+  /**
+   * Get product categories
+   */
+  async getCategories() {
+    // Получаем уникальные категории из товаров
+    const products = await this.productRepo.findMany(
+      {},
+      {
+        select: { category: true },
+      }
+    );
+
+    const categories = [
+      ...new Set(products.map((p) => p.category).filter(Boolean)),
+    ];
+    return categories.sort();
+  }
 }
