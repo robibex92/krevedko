@@ -41,6 +41,7 @@ export class GuestCartService {
             priceKopecks: true,
             isActive: true,
             stockQuantity: true,
+            category: true,
           },
         },
         collection: {
@@ -48,23 +49,55 @@ export class GuestCartService {
             id: true,
             title: true,
             status: true,
+            startsAt: true,
+            endsAt: true,
           },
         },
       },
       orderBy: { createdAt: "desc" },
     });
 
-    // Calculate total
-    const totalKopecks = cartItems.reduce(
-      (sum, item) =>
-        sum +
-        item.unitPriceKopecks * parseFloat(item.quantityDecimal.toString()),
-      0
-    );
+    // Group items by collection to match the format expected by frontend
+    const collectionsMap = new Map();
+    let grandTotal = 0;
+
+    for (const item of cartItems) {
+      const collectionId = item.collectionId;
+
+      if (!collectionsMap.has(collectionId)) {
+        collectionsMap.set(collectionId, {
+          collection: item.collection,
+          items: [],
+        });
+      }
+
+      const collectionData = collectionsMap.get(collectionId);
+      const subtotal =
+        item.unitPriceKopecks * parseFloat(item.quantityDecimal.toString());
+      grandTotal += subtotal;
+
+      collectionData.items.push({
+        id: item.id,
+        productId: item.product.id,
+        title: item.product.title,
+        unitLabel: item.product.unitLabel,
+        quantityDecimal: item.quantityDecimal.toString(),
+        unitPriceKopecks: item.unitPriceKopecks,
+        subtotalKopecks: Math.round(subtotal),
+        imagePath: item.product.imagePath,
+        collectionId: item.collectionId,
+        category: item.product.category,
+        stepDecimal: item.product.stepDecimal?.toString() || "1",
+        isAvailable: item.product.isActive,
+        displayStockHint: null,
+      });
+    }
+
+    const collections = Array.from(collectionsMap.values());
 
     return {
-      items: cartItems,
-      totalKopecks: Math.round(totalKopecks),
+      collections,
+      totalKopecks: Math.round(grandTotal),
       count: cartItems.length,
     };
   }

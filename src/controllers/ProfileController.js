@@ -43,6 +43,9 @@ export class ProfileController extends BaseController {
       updates
     );
 
+    // Очищаем кэш профиля после обновления
+    this.profileService.clearProfileCache(userId);
+
     // Session removed - JWT-only auth
 
     // Применяем DTO для профиля
@@ -124,6 +127,9 @@ export class ProfileController extends BaseController {
     const relPath = ["avatars", req.file.filename].join("/");
 
     const updatedUser = await this.profileService.updateAvatar(userId, relPath);
+
+    // Очищаем кэш профиля после обновления аватара
+    this.profileService.clearProfileCache(userId);
 
     // Session removed - JWT-only auth
 

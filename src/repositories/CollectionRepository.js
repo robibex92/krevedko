@@ -24,7 +24,10 @@ export class CollectionRepository extends BaseRepository {
     return this.findMany(
       { status },
       {
-        orderBy: [{ status: "desc" }, { id: "desc" }],
+        orderBy: [
+          { startsAt: "desc" }, // Новые периоды сначала
+          { id: "desc" }, // По ID как fallback
+        ],
         ...options,
       }
     );

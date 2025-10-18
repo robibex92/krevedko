@@ -67,9 +67,8 @@ export class CollectionController extends BaseController {
    */
   async activateCollection(req, res) {
     const collectionId = Number(req.params.id);
-    const collection = await this.collectionService.activateCollection(
-      collectionId
-    );
+    const collection =
+      await this.collectionService.activateCollection(collectionId);
 
     return this.success(res, { collection });
   }
@@ -80,10 +79,19 @@ export class CollectionController extends BaseController {
    */
   async closeCollection(req, res) {
     const collectionId = Number(req.params.id);
-    const collection = await this.collectionService.closeCollection(
-      collectionId
-    );
+    const collection =
+      await this.collectionService.closeCollection(collectionId);
 
     return this.success(res, { collection });
+  }
+
+  /**
+   * Close all active collections (admin)
+   * PATCH /api/admin/collections/close-all
+   */
+  async closeAllActiveCollections(req, res) {
+    const results = await this.collectionService.closeAllActiveCollections();
+
+    return this.success(res, { results }, "Все активные периоды закрыты");
   }
 }

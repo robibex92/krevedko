@@ -31,6 +31,10 @@ export function createAdminCollectionRoutes(container) {
     asyncHandler(collectionController.closeCollection)
   );
   router.patch(
+    "/collections/close-all",
+    asyncHandler(collectionController.closeAllActiveCollections)
+  );
+  router.patch(
     "/collections/:collectionId/products/:productId",
     asyncHandler(productController.updateCollectionProduct)
   );

@@ -551,6 +551,21 @@ async function editMessageTextOrCaption(
  */
 export async function sendProductToCategory(prisma, product, category) {
   try {
+    // Проверяем, есть ли уже сообщение для этого товара в этой категории
+    const existingMessage = await prisma.productTelegramMessage.findUnique({
+      where: {
+        productId_categoryId: {
+          productId: product.id,
+          categoryId: category.id,
+        },
+      },
+    });
+
+    // Если сообщение уже существует, обновляем его
+    if (existingMessage) {
+      return await updateProductMessage(prisma, product, category.id);
+    }
+
     const messageText = buildProductMessage(product);
     const chatId = category.telegramChatId;
     const threadId = category.telegramThreadId || null;
@@ -660,7 +675,15 @@ export async function updateProductMessage(prisma, product, categoryId) {
 
     if (!canEdit) {
       // Удаляем старое и создаем новое
-      await deleteTelegramMessage(chatId, messageId);
+      try {
+        await deleteTelegramMessage(chatId, messageId);
+      } catch (error) {
+        console.log(
+          `Failed to delete old message ${messageId}, continuing with new message creation:`,
+          error.message
+        );
+      }
+
       await prisma.productTelegramMessage.delete({
         where: { id: messageRecord.id },
       });
@@ -701,7 +724,15 @@ export async function updateProductMessage(prisma, product, categoryId) {
         }
       } else if (hasNewImage && !hadImage) {
         // Было текстовое, стало с фото - удаляем старое, создаем новое
-        await deleteTelegramMessage(chatId, messageId);
+        try {
+          await deleteTelegramMessage(chatId, messageId);
+        } catch (error) {
+          console.log(
+            `Failed to delete old message ${messageId}, continuing with new message creation:`,
+            error.message
+          );
+        }
+
         await prisma.productTelegramMessage.delete({
           where: { id: messageRecord.id },
         });
@@ -736,7 +767,15 @@ export async function updateProductMessage(prisma, product, categoryId) {
     } catch (error) {
       if (error.message === "MESSAGE_TOO_OLD") {
         // Удаляем старое и создаем новое
-        await deleteTelegramMessage(chatId, messageId);
+        try {
+          await deleteTelegramMessage(chatId, messageId);
+        } catch (deleteError) {
+          console.log(
+            `Failed to delete old message ${messageId}, continuing with new message creation:`,
+            deleteError.message
+          );
+        }
+
         await prisma.productTelegramMessage.delete({
           where: { id: messageRecord.id },
         });
@@ -797,7 +836,15 @@ export async function markProductAsRemoved(prisma, productId) {
         } catch (error) {
           if (error.message === "MESSAGE_TOO_OLD") {
             // Удаляем старое и создаем новое с зачеркнутым текстом
-            await deleteTelegramMessage(chatId, messageId);
+            try {
+              await deleteTelegramMessage(chatId, messageId);
+            } catch (deleteError) {
+              console.log(
+                `Failed to delete old message ${messageId}, continuing with new message creation:`,
+                deleteError.message
+              );
+            }
+
             await sendTelegramMessage(chatId, removedText, {
               threadId: messageRecord.category.telegramThreadId,
             });
@@ -917,7 +964,14 @@ export async function removeProductFromQuickPickup(prisma, productId) {
     });
 
     if (settings && settings.chatId) {
-      await deleteTelegramMessage(settings.chatId, messageRecord.messageId);
+      try {
+        await deleteTelegramMessage(settings.chatId, messageRecord.messageId);
+      } catch (error) {
+        console.log(
+          `Failed to delete in-stock message ${messageRecord.messageId}, continuing:`,
+          error.message
+        );
+      }
     }
 
     await prisma.inStockTelegramMessage.delete({

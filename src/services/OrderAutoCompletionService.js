@@ -92,11 +92,11 @@ export class OrderAutoCompletionService {
    * @param {Object} order - Заказ для завершения
    */
   async completeOrder(order) {
-    // Обновляем статус заказа на "Оплачен" (PAID)
+    // Обновляем статус заказа на "Выполнен" (COMPLETED)
     await this.prisma.order.update({
       where: { id: order.id },
       data: {
-        status: "PAID",
+        status: "COMPLETED",
         updatedAt: new Date(),
       },
     });

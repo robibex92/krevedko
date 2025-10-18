@@ -6,7 +6,8 @@ import { createGuestCartRoutes } from "./guest-cart.routes.js";
 import { createCollectionRoutes } from "./collections.routes.js";
 import { createFavoriteRoutes } from "./favorites.routes.js";
 import { createProfileRoutes } from "./profile.routes.js";
-import { createReferralRoutes } from "./referral.routes.js";
+// РЕФЕРАЛЬНАЯ ПРОГРАММА ЗАКОММЕНТИРОВАНА - НЕ РЕАЛИЗУЕМ
+// import { createReferralRoutes } from "./referral.routes.js";
 import { createNotificationRoutes } from "./notifications.routes.js";
 import { createReviewRoutes } from "./reviews.routes.js";
 import { createProductFeedbackRoutes } from "./product-feedback.routes.js";
@@ -41,7 +42,8 @@ export function createV2Routes(container) {
   router.use(createCollectionRoutes(container));
   router.use(createFavoriteRoutes(container));
   router.use(createProfileRoutes(container));
-  router.use(createReferralRoutes(container));
+  // РЕФЕРАЛЬНАЯ ПРОГРАММА ЗАКОММЕНТИРОВАНА - НЕ РЕАЛИЗУЕМ
+  // router.use(createReferralRoutes(container));
   router.use(createNotificationRoutes(container));
   router.use(createReviewRoutes(container));
   router.use(createProductFeedbackRoutes(container));

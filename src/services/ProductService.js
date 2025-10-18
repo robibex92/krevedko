@@ -98,8 +98,13 @@ export class ProductService {
 
     const product = await this.productRepo.create(productData);
 
-    // Send to Telegram if category is set
-    if (product.category && this.telegramBotService && this.prisma) {
+    // Send to Telegram only if product is active and category is set
+    if (
+      product.isActive &&
+      product.category &&
+      this.telegramBotService &&
+      this.prisma
+    ) {
       try {
         const category = await this.prisma.category.findUnique({
           where: { name: product.category, isActive: true },
@@ -175,8 +180,22 @@ export class ProductService {
     // Handle Telegram notifications
     if (this.telegramBotService && this.prisma) {
       try {
+        // If product was activated (from inactive to active)
+        if (data.isActive === true && oldProduct.isActive === false) {
+          if (product.category) {
+            const category = await this.prisma.category.findUnique({
+              where: { name: product.category, isActive: true },
+            });
+            if (category) {
+              await this.telegramBotService.enqueueMessage("product_create", {
+                productId: product.id,
+                categoryId: category.id,
+              });
+            }
+          }
+        }
         // If product was deactivated, mark as removed
-        if (data.isActive === false && oldProduct.isActive === true) {
+        else if (data.isActive === false && oldProduct.isActive === true) {
           await this.telegramBotService.enqueueMessage("product_remove", {
             productId: product.id,
           });

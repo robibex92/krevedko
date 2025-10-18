@@ -341,17 +341,43 @@ export class OrderController extends BaseController {
    * DELETE /api/orders/:id/items/:itemId
    */
   async removeItemFromOrder(req, res) {
-    const userId = this.getUserId(req);
     const orderId = Number(req.params.id);
     const itemId = Number(req.params.itemId);
 
-    const result = await this.orderService.removeItemFromOrder(
-      orderId,
-      userId,
-      itemId
-    );
+    const result = await this.orderService.removeItemFromOrder(orderId, itemId);
 
     return this.success(res, result, "Товар удален из заказа");
+  }
+
+  /**
+   * Обновление количества товара в заказе
+   * PATCH /api/orders/items/:itemId/quantity
+   */
+  async updateItemQuantity(req, res) {
+    const itemId = Number(req.params.itemId);
+    const { quantity } = req.body;
+
+    if (!quantity || quantity <= 0) {
+      return this.badRequest(res, "Необходимо указать корректное количество");
+    }
+
+    // Получаем заказ по itemId
+    const item = await this.orderService.orderRepo.prisma.orderItem.findUnique({
+      where: { id: itemId },
+      include: { order: true },
+    });
+
+    if (!item) {
+      return this.notFound(res, "Товар не найден");
+    }
+
+    const result = await this.orderService.updateItemQuantity(
+      item.orderId,
+      itemId,
+      quantity
+    );
+
+    return this.success(res, result, "Количество товара обновлено");
   }
 
   /**

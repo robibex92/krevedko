@@ -1,5 +1,5 @@
 import { BaseController } from "../core/base/BaseController.js";
-import { getCached, setCache } from "../services/cache.js";
+import { getCached, setCache, clearCache } from "../services/cache.js";
 import {
   toProductListDTOArray,
   toProductAdminDTOArray,
@@ -35,6 +35,9 @@ export class ProductController extends BaseController {
   async createProduct(req, res) {
     const product = await this.productService.createProduct(req.body);
 
+    // Очищаем кэш товаров после создания
+    clearCache("products_");
+
     return this.created(res, { product });
   }
 
@@ -48,6 +51,9 @@ export class ProductController extends BaseController {
       productId,
       req.body
     );
+
+    // Очищаем кэш товаров после обновления
+    clearCache("products_");
 
     return this.success(res, { product });
   }
@@ -66,6 +72,9 @@ export class ProductController extends BaseController {
       minStock
     );
 
+    // Очищаем кэш товаров после обновления остатков
+    clearCache("products_");
+
     return this.success(res, { product });
   }
 
@@ -77,6 +86,9 @@ export class ProductController extends BaseController {
     const productId = Number(req.params.id);
 
     const result = await this.productService.deleteProduct(productId);
+
+    // Очищаем кэш товаров после удаления
+    clearCache("products_");
 
     return this.success(res, result);
   }
@@ -114,6 +126,9 @@ export class ProductController extends BaseController {
       console.log("Updating product image:", { productId, relPath, url });
 
       const product = await this.productService.updateImage(productId, relPath);
+
+      // Очищаем кэш товаров после обновления изображения
+      clearCache("products_");
 
       console.log("Product image updated successfully:", { productId, url });
 
@@ -186,6 +201,9 @@ export class ProductController extends BaseController {
       productId,
       req.body
     );
+
+    // Очищаем кэш товаров после обновления коллекционного товара
+    clearCache("products_");
 
     return this.success(res, { override });
   }

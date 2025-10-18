@@ -27,7 +27,8 @@ import { AuthService } from "../services/AuthService.js";
 import { MailerService } from "../services/MailerService.js";
 import { FavoriteService } from "../services/FavoriteService.js";
 import { ProfileService } from "../services/ProfileService.js";
-import { ReferralService } from "../services/ReferralService.js";
+// РЕФЕРАЛЬНАЯ ПРОГРАММА ЗАКОММЕНТИРОВАНА - НЕ РЕАЛИЗУЕМ
+// import { ReferralService } from "../services/ReferralService.js";
 import { NotificationService } from "../services/NotificationService.js";
 import { TelegramBotService } from "../services/TelegramBotService.js";
 import { ReviewService } from "../services/ReviewService.js";
@@ -47,7 +48,8 @@ import { CollectionController } from "../controllers/CollectionController.js";
 import { AuthController } from "../controllers/AuthController.js";
 import { FavoriteController } from "../controllers/FavoriteController.js";
 import { ProfileController } from "../controllers/ProfileController.js";
-import { ReferralController } from "../controllers/ReferralController.js";
+// РЕФЕРАЛЬНАЯ ПРОГРАММА ЗАКОММЕНТИРОВАНА - НЕ РЕАЛИЗУЕМ
+// import { ReferralController } from "../controllers/ReferralController.js";
 import { NotificationController } from "../controllers/NotificationController.js";
 import { ReviewController } from "../controllers/ReviewController.js";
 import { ProductFeedbackController } from "../controllers/ProductFeedbackController.js";
@@ -227,10 +229,11 @@ export function configureContainer(prisma) {
       )
   );
 
-  container.register(
-    "referralService",
-    (c) => new ReferralService(c.resolve("userRepository"))
-  );
+  // РЕФЕРАЛЬНАЯ ПРОГРАММА ЗАКОММЕНТИРОВАНА - НЕ РЕАЛИЗУЕМ
+  // container.register(
+  //   "referralService",
+  //   (c) => new ReferralService(c.resolve("userRepository"))
+  // );
 
   container.register(
     "notificationService",
@@ -347,10 +350,11 @@ export function configureContainer(prisma) {
     (c) => new ProfileController(c.resolve("profileService"))
   );
 
-  container.register(
-    "referralController",
-    (c) => new ReferralController(c.resolve("referralService"))
-  );
+  // РЕФЕРАЛЬНАЯ ПРОГРАММА ЗАКОММЕНТИРОВАНА - НЕ РЕАЛИЗУЕМ
+  // container.register(
+  //   "referralController",
+  //   (c) => new ReferralController(c.resolve("referralService"))
+  // );
 
   container.register(
     "notificationController",

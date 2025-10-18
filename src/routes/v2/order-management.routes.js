@@ -50,6 +50,12 @@ export function createOrderManagementRoutes(container) {
     asyncHandler(orderController.removeItemFromOrder)
   );
 
+  // Обновление количества товара в заказе
+  router.patch(
+    "/orders/items/:itemId/quantity",
+    asyncHandler(orderController.updateItemQuantity)
+  );
+
   // Изменение статуса заказа (только админы)
   router.patch(
     "/orders/:id/status",

@@ -401,12 +401,20 @@ export async function deleteTelegramMessage(chatId, messageId) {
 
   if (!res.ok) {
     const bodyText = await res.text();
-    // Игнорируем ошибку если сообщение уже удалено
-    if (!bodyText.includes("message to delete not found")) {
+    // Игнорируем ошибку если сообщение уже удалено или недоступно для удаления
+    if (
+      !bodyText.includes("message to delete not found") &&
+      !bodyText.includes("message can't be deleted") &&
+      !bodyText.includes("Bad Request: message can't be deleted")
+    ) {
       throw new BusinessLogicError(
         `Failed to delete Telegram message: ${res.status}`,
         "TELEGRAM_DELETE_FAILED",
         { status: res.status, response: bodyText }
+      );
+    } else {
+      console.log(
+        `Telegram message ${messageId} already deleted or can't be deleted, ignoring error`
       );
     }
   }

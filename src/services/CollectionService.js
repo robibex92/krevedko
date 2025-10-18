@@ -21,7 +21,11 @@ export class CollectionService {
     return this.collectionRepo.findMany(
       {},
       {
-        orderBy: [{ status: "desc" }, { id: "desc" }],
+        orderBy: [
+          { status: "desc" }, // Активные сначала
+          { startsAt: "desc" }, // Новые периоды сначала
+          { id: "desc" }, // По ID как fallback
+        ],
         ...options,
       }
     );
@@ -80,6 +84,7 @@ export class CollectionService {
 
   /**
    * Activate collection
+   * Теперь позволяет активировать несколько коллекций одновременно
    */
   async activateCollection(collectionId) {
     const collection = await this.collectionRepo.findByIdOrFail(collectionId);
@@ -91,6 +96,7 @@ export class CollectionService {
       );
     }
 
+    // Активируем коллекцию без закрытия других активных коллекций
     return this.collectionRepo.activate(collectionId);
   }
 
@@ -108,6 +114,34 @@ export class CollectionService {
     }
 
     return this.collectionRepo.close(collectionId);
+  }
+
+  /**
+   * Close all active collections
+   * Полезно для массового закрытия всех периодов
+   */
+  async closeAllActiveCollections() {
+    const activeCollections = await this.collectionRepo.findActive();
+
+    if (activeCollections.length === 0) {
+      throw new BusinessLogicError(
+        "No active collections to close",
+        "NO_ACTIVE_COLLECTIONS"
+      );
+    }
+
+    const results = [];
+    for (const collection of activeCollections) {
+      try {
+        const closed = await this.collectionRepo.close(collection.id);
+        results.push(closed);
+      } catch (error) {
+        console.error(`Failed to close collection ${collection.id}:`, error);
+        results.push({ id: collection.id, error: error.message });
+      }
+    }
+
+    return results;
   }
 
   /**
