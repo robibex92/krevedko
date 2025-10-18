@@ -43,6 +43,7 @@
     "passport-mailru": "^0.0.1",
     "passport-oauth": "^1.0.0",
     "passport-yandex": "^0.0.5",
+    "puppeteer": "^24.25.0",
     "redis": "^5.8.3",
     "sharp": "^0.34.4",
     "winston": "^3.18.3"

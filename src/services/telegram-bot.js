@@ -6,7 +6,9 @@ import {
   editTelegramMessage,
   editTelegramMessageMedia,
   deleteTelegramMessage,
+  sendTelegramDocument,
 } from "./telegram.js";
+import { InvoiceService } from "./InvoiceService.js";
 
 const MESSAGE_EDIT_WINDOW = 48 * 60 * 60 * 1000; // 48 часов в миллисекундах
 
@@ -1161,11 +1163,14 @@ export async function sendOrderNotificationToAdmin(prisma, order, user) {
         "Клиент";
       lines.push(`👤 От: ${fullName}`);
 
+      // Показываем все доступные контакты
       if (orderUser.telegramUsername) {
         lines.push(`📱 Telegram: @${orderUser.telegramUsername}`);
-      } else if (orderUser.email) {
+      }
+      if (orderUser.email) {
         lines.push(`📧 Email: ${orderUser.email}`);
-      } else if (orderUser.phone) {
+      }
+      if (orderUser.phone) {
         lines.push(`📞 Телефон: ${orderUser.phone}`);
       }
     } else if (fullOrder.isGuestOrder) {
@@ -1232,7 +1237,26 @@ export async function sendOrderNotificationToAdmin(prisma, order, user) {
 
     const messageText = lines.join("\n");
 
+    // Отправляем текстовое сообщение
     await sendTelegramMessage(adminChatId, messageText, { parse_mode: "HTML" });
+
+    // Генерируем и отправляем PDF фактуру
+    try {
+      const invoiceService = new InvoiceService();
+      const pdfBuffer = await invoiceService.generateInvoicePDF(fullOrder);
+
+      // Отправляем PDF как документ
+      await sendTelegramDocument(adminChatId, pdfBuffer, {
+        filename: `invoice_${fullOrder.orderNumber || fullOrder.id}.pdf`,
+        caption: `📄 Фактура для заказа ${fullOrder.orderNumber || fullOrder.id}`,
+      });
+    } catch (pdfError) {
+      console.error(
+        `Failed to generate PDF invoice for order ${order.id}:`,
+        pdfError
+      );
+      // Не бросаем ошибку, так как основное уведомление уже отправлено
+    }
   } catch (error) {
     console.error(
       `Failed to send order ${order.id} notification to admin:`,

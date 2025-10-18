@@ -34,37 +34,60 @@ export class OrderController extends BaseController {
           ];
 
     const createdOrders = [];
+    const failedOrders = [];
 
     for (const orderData of ordersPayload) {
-      // Resolve collection
-      const collection =
-        await this.collectionService.resolveCollectionSelection(
-          orderData.collectionId,
-          ordersPayload.length > 1 && !orderData.collectionId
+      try {
+        // Resolve collection
+        const collection =
+          await this.collectionService.resolveCollectionSelection(
+            orderData.collectionId,
+            ordersPayload.length > 1 && !orderData.collectionId
+          );
+
+        // Create order
+        const order = await this.orderService.createFromCart(
+          userId,
+          collection.id,
+          {
+            deliveryType: orderData.deliveryType || "PICKUP",
+            deliveryAddress: orderData.deliveryAddress || null,
+            paymentMethod: orderData.paymentMethod || "development", // Временно "в разработке"
+          }
         );
 
-      // Create order
-      const order = await this.orderService.createFromCart(
-        userId,
-        collection.id,
-        {
-          deliveryType: orderData.deliveryType || "PICKUP",
-          deliveryAddress: orderData.deliveryAddress || null,
-          paymentMethod: orderData.paymentMethod || "development", // Временно "в разработке"
-        }
-      );
+        createdOrders.push({
+          orderId: order.id,
+          orderNumber: order.orderNumber,
+          collectionId: order.collectionId,
+        });
+      } catch (error) {
+        console.error(
+          `Failed to create order for collection ${orderData.collectionId}:`,
+          error
+        );
+        failedOrders.push({
+          collectionId: orderData.collectionId,
+          error: error.message || "Неизвестная ошибка",
+        });
+      }
+    }
 
-      createdOrders.push({
-        orderId: order.id,
-        orderNumber: order.orderNumber,
-        collectionId: order.collectionId,
+    if (createdOrders.length === 0) {
+      return this.badRequest(res, "Не удалось создать ни одного заказа", {
+        failedOrders,
       });
+    }
+
+    const response = { orders: createdOrders };
+    if (failedOrders.length > 0) {
+      response.failedOrders = failedOrders;
     }
 
     return this.created(
       res,
-      { orders: createdOrders },
-      "Order created successfully"
+      response,
+      `Создано заказов: ${createdOrders.length}${failedOrders.length > 0 ? `, не удалось создать: ${failedOrders.length}` : ""}`
     );
   }
 

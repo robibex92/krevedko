@@ -440,6 +440,63 @@ export async function deleteTelegramMessage(chatId, messageId) {
   return true;
 }
 
+export async function sendTelegramDocument(
+  chatId,
+  documentBuffer,
+  options = {}
+) {
+  const { TELEGRAM_BOT_TOKEN: token } = process.env;
+  if (!token) {
+    throw new BusinessLogicError(
+      "Telegram bot token is not configured",
+      "TELEGRAM_NOT_CONFIGURED"
+    );
+  }
+
+  const fetchImpl = await ensureFetch();
+  const url = `https://api.telegram.org/bot${token}/sendDocument`;
+
+  // Создаем FormData для отправки документа
+  const formData = new FormData();
+  formData.append("chat_id", String(chatId));
+
+  // Создаем File объект из Buffer
+  const fileName = options.filename || "document.pdf";
+  const file = new FileAPI([documentBuffer], fileName, {
+    type: "application/pdf",
+  });
+  formData.append("document", file, fileName);
+
+  if (options.caption) {
+    formData.append("caption", options.caption);
+  }
+
+  if (options.parse_mode) {
+    formData.append("parse_mode", options.parse_mode);
+  }
+
+  if (options.threadId) {
+    formData.append("message_thread_id", String(options.threadId));
+  }
+
+  const res = await fetchImpl(url, {
+    method: "POST",
+    body: formData,
+  });
+
+  if (!res.ok) {
+    const bodyText = await res.text();
+    throw new BusinessLogicError(
+      `Failed to send Telegram document: ${res.status}`,
+      "TELEGRAM_SEND_DOCUMENT_FAILED",
+      { status: res.status, response: bodyText }
+    );
+  }
+
+  const result = await res.json();
+  return result;
+}
+
 export function buildTelegramMessage(message) {
   return String(message || "").trim();
 }
