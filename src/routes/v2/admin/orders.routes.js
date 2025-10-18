@@ -19,6 +19,15 @@ export function createAdminOrderRoutes(container) {
     "/orders/:id/delivery",
     asyncHandler(orderController.updateOrderDelivery)
   );
+  router.post("/orders/:id/items", asyncHandler(orderController.addOrderItem));
+  router.patch(
+    "/orders/items/:id/quantity",
+    asyncHandler(orderController.updateOrderItemQuantity)
+  );
+  router.delete(
+    "/orders/items/:id",
+    asyncHandler(orderController.deleteOrderItem)
+  );
   router.post(
     "/orders/:id/payment-proof",
     paymentUploadBase.single("image"),

@@ -975,4 +975,147 @@ export class OrderService {
 
     return { order: updatedOrder };
   }
+
+  /**
+   * Add item to existing order (admin)
+   */
+  async addItemToOrder(orderId, itemData) {
+    const { productId, quantity } = itemData;
+
+    // Проверяем, что заказ существует
+    const order = await this.orderRepo.findByIdOrFail(orderId);
+
+    // Проверяем, что товар существует
+    const product = await this.prisma.product.findUnique({
+      where: { id: productId },
+    });
+
+    if (!product) {
+      throw new BusinessLogicError("Product not found", "PRODUCT_NOT_FOUND");
+    }
+
+    // Проверяем, есть ли уже такой товар в заказе
+    const existingItem = await this.prisma.orderItem.findFirst({
+      where: {
+        orderId: orderId,
+        productId: productId,
+      },
+    });
+
+    if (existingItem) {
+      // Если товар уже есть, увеличиваем количество
+      const updatedItem = await this.prisma.orderItem.update({
+        where: { id: existingItem.id },
+        data: {
+          quantityDecimal: existingItem.quantityDecimal + quantity,
+          subtotalKopecks:
+            (existingItem.quantityDecimal + quantity) * product.priceKopecks,
+        },
+      });
+
+      // Пересчитываем общую сумму заказа
+      await this.recalculateOrderTotal(orderId);
+
+      return { item: updatedItem, message: "Item quantity updated" };
+    } else {
+      // Если товара нет, создаем новый item
+      const newItem = await this.prisma.orderItem.create({
+        data: {
+          orderId: orderId,
+          productId: productId,
+          quantityDecimal: quantity,
+          unitPriceKopecks: product.priceKopecks,
+          subtotalKopecks: quantity * product.priceKopecks,
+          titleSnapshot: product.title,
+          unitLabelSnapshot: product.unitLabel,
+          imagePathSnapshot: product.imagePath,
+        },
+      });
+
+      // Пересчитываем общую сумму заказа
+      await this.recalculateOrderTotal(orderId);
+
+      return { item: newItem, message: "Item added to order" };
+    }
+  }
+
+  /**
+   * Пересчитать общую сумму заказа
+   */
+  async recalculateOrderTotal(orderId) {
+    const items = await this.prisma.orderItem.findMany({
+      where: { orderId: orderId },
+    });
+
+    const totalKopecks = items.reduce(
+      (sum, item) => sum + (item.subtotalKopecks || 0),
+      0
+    );
+
+    await this.prisma.order.update({
+      where: { id: orderId },
+      data: { totalKopecks: totalKopecks },
+    });
+  }
+
+  /**
+   * Update order item quantity (admin)
+   */
+  async updateOrderItemQuantity(itemId, newQuantity) {
+    // Проверяем, что item существует
+    const item = await this.prisma.orderItem.findUnique({
+      where: { id: itemId },
+      include: { product: true },
+    });
+
+    if (!item) {
+      throw new BusinessLogicError(
+        "Order item not found",
+        "ORDER_ITEM_NOT_FOUND"
+      );
+    }
+
+    // Обновляем количество и сумму
+    const updatedItem = await this.prisma.orderItem.update({
+      where: { id: itemId },
+      data: {
+        quantityDecimal: newQuantity,
+        subtotalKopecks: newQuantity * item.product.priceKopecks,
+      },
+    });
+
+    // Пересчитываем общую сумму заказа
+    await this.recalculateOrderTotal(item.orderId);
+
+    return { item: updatedItem, message: "Item quantity updated" };
+  }
+
+  /**
+   * Delete order item (admin)
+   */
+  async deleteOrderItem(itemId) {
+    // Проверяем, что item существует
+    const item = await this.prisma.orderItem.findUnique({
+      where: { id: itemId },
+    });
+
+    if (!item) {
+      throw new BusinessLogicError(
+        "Order item not found",
+        "ORDER_ITEM_NOT_FOUND"
+      );
+    }
+
+    const orderId = item.orderId;
+
+    // Удаляем item
+    await this.prisma.orderItem.delete({
+      where: { id: itemId },
+    });
+
+    // Пересчитываем общую сумму заказа
+    await this.recalculateOrderTotal(orderId);
+
+    return { message: "Item deleted from order" };
+  }
 }

@@ -471,4 +471,53 @@ export class OrderController extends BaseController {
 
     return this.success(res, { stats });
   }
+
+  /**
+   * Add item to order (admin)
+   * POST /api/admin/orders/:id/items
+   */
+  async addOrderItem(req, res) {
+    const orderId = this.getIdParam(req);
+    const { productId, quantity } = req.body;
+
+    if (!productId || !quantity) {
+      return this.badRequest(res, "Product ID and quantity are required");
+    }
+
+    const result = await this.orderService.addItemToOrder(orderId, {
+      productId: Number(productId),
+      quantity: Number(quantity),
+    });
+
+    return this.created(res, result);
+  }
+
+  /**
+   * Update order item quantity (admin)
+   * PATCH /api/admin/orders/items/:id/quantity
+   */
+  async updateOrderItemQuantity(req, res) {
+    const itemId = this.getIdParam(req);
+    const { quantity } = req.body;
+
+    if (!quantity) {
+      return this.badRequest(res, "Quantity is required");
+    }
+
+    const result = await this.orderService.updateOrderItemQuantity(
+      itemId,
+      Number(quantity)
+    );
+    return this.success(res, result);
+  }
+
+  /**
+   * Delete order item (admin)
+   * DELETE /api/admin/orders/items/:id
+   */
+  async deleteOrderItem(req, res) {
+    const itemId = this.getIdParam(req);
+    const result = await this.orderService.deleteOrderItem(itemId);
+    return this.success(res, result);
+  }
 }
