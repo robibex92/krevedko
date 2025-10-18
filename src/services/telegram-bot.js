@@ -669,6 +669,18 @@ export async function updateProductMessage(prisma, product, categoryId) {
     const chatId = messageRecord.category.telegramChatId;
     const messageId = messageRecord.messageId;
 
+    // Проверяем, изменился ли контент
+    const hasContentChanged =
+      newMessageText !== messageRecord.messageText ||
+      !!product.imagePath !== messageRecord.hasMedia;
+
+    if (!hasContentChanged) {
+      console.log(
+        `Product ${product.id} content hasn't changed, skipping Telegram update`
+      );
+      return null;
+    }
+
     // Проверяем, можно ли редактировать сообщение (не прошло 48 часов)
     const messageAge = Date.now() - messageRecord.sentAt.getTime();
     const canEdit = messageAge < MESSAGE_EDIT_WINDOW && messageRecord.canEdit;

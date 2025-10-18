@@ -29,7 +29,7 @@ ensureLogDir();
 async function logSecurityEvent(event) {
   const logEntry = {
     timestamp: new Date().toISOString(),
-    ...event
+    ...event,
   };
 
   const logLine = JSON.stringify(logEntry) + "\n";
@@ -58,7 +58,7 @@ function detectSuspiciousPatterns(req) {
     suspicious.push({
       type: "SQL_INJECTION_ATTEMPT",
       location: "URL",
-      value: url
+      value: url,
     });
   }
 
@@ -67,7 +67,7 @@ function detectSuspiciousPatterns(req) {
     suspicious.push({
       type: "PATH_TRAVERSAL_ATTEMPT",
       location: "URL",
-      value: url
+      value: url,
     });
   }
 
@@ -77,7 +77,7 @@ function detectSuspiciousPatterns(req) {
     suspicious.push({
       type: "SUSPICIOUS_USER_AGENT",
       location: "Headers",
-      value: userAgent || "empty"
+      value: userAgent || "empty",
     });
   }
 
@@ -87,7 +87,7 @@ function detectSuspiciousPatterns(req) {
     suspicious.push({
       type: "XSS_ATTEMPT",
       location: "Query",
-      value: queryStr
+      value: queryStr,
     });
   }
 
@@ -97,7 +97,7 @@ function detectSuspiciousPatterns(req) {
     suspicious.push({
       type: "COMMAND_INJECTION_ATTEMPT",
       location: "Body",
-      value: bodyStr.substring(0, 200)
+      value: bodyStr.substring(0, 200),
     });
   }
 
@@ -111,11 +111,12 @@ export function securityLogger(req, res, next) {
   const startTime = Date.now();
 
   // Определяем IP
-  const ip = req.ip || 
-             req.headers["x-forwarded-for"]?.split(",")[0]?.trim() ||
-             req.headers["x-real-ip"] ||
-             req.connection?.remoteAddress ||
-             "unknown";
+  const ip =
+    req.ip ||
+    req.headers["x-forwarded-for"]?.split(",")[0]?.trim() ||
+    req.headers["x-real-ip"] ||
+    req.connection?.remoteAddress ||
+    "unknown";
 
   // Определяем пользователя
   const userId = req.user?.id || null;
@@ -133,13 +134,13 @@ export function securityLogger(req, res, next) {
       method: req.method,
       url: req.originalUrl || req.url,
       userAgent: req.headers["user-agent"],
-      patterns: suspicious
+      patterns: suspicious,
     });
   }
 
   // Перехватываем ответ для логирования ошибок
   const originalJson = res.json.bind(res);
-  res.json = function(body) {
+  res.json = function (body) {
     const duration = Date.now() - startTime;
 
     // Логируем ошибки аутентификации/авторизации
@@ -151,7 +152,7 @@ export function securityLogger(req, res, next) {
         userId,
         method: req.method,
         url: req.originalUrl || req.url,
-        duration
+        duration,
       });
     }
 
@@ -163,7 +164,7 @@ export function securityLogger(req, res, next) {
         userId,
         method: req.method,
         url: req.originalUrl || req.url,
-        duration
+        duration,
       });
     }
 
@@ -176,7 +177,7 @@ export function securityLogger(req, res, next) {
         userId,
         method: req.method,
         url: req.originalUrl || req.url,
-        duration
+        duration,
       });
     }
 
@@ -189,7 +190,7 @@ export function securityLogger(req, res, next) {
         userId,
         method: req.method,
         url: req.originalUrl || req.url,
-        duration
+        duration,
       });
     }
 
@@ -212,7 +213,7 @@ export const securityEvents = {
       type: "LOGIN_SUCCESS",
       userId,
       ip,
-      method
+      method,
     });
   },
 
@@ -225,7 +226,7 @@ export const securityEvents = {
       type: "LOGIN_FAILURE",
       email,
       ip,
-      reason
+      reason,
     });
   },
 
@@ -237,7 +238,7 @@ export const securityEvents = {
       severity: "MEDIUM",
       type: "PASSWORD_CHANGE",
       userId,
-      ip
+      ip,
     });
   },
 
@@ -251,7 +252,7 @@ export const securityEvents = {
       orderId,
       userId,
       totalKopecks,
-      ip
+      ip,
     });
   },
 
@@ -264,7 +265,7 @@ export const securityEvents = {
       type: "UNAUTHORIZED_ORDER_ACCESS",
       orderId,
       attemptedBy,
-      ip
+      ip,
     });
   },
 
@@ -277,9 +278,9 @@ export const securityEvents = {
       type: "ADMIN_CREATED",
       newAdminId,
       createdBy,
-      ip
+      ip,
     });
-  }
+  },
 };
 
 /**
@@ -289,12 +290,12 @@ export async function getSecurityLogs(limit = 100) {
   try {
     const content = await fs.readFile(SECURITY_LOG_FILE, "utf8");
     const lines = content.trim().split("\n");
-    
+
     // Берем последние N строк
     const recentLines = lines.slice(-limit);
-    
+
     return recentLines
-      .map(line => {
+      .map((line) => {
         try {
           return JSON.parse(line);
         } catch {
@@ -316,14 +317,14 @@ export async function getSecurityLogs(limit = 100) {
  */
 export async function analyzeSecurityLogs() {
   const logs = await getSecurityLogs(1000);
-  
+
   const analysis = {
     totalEvents: logs.length,
     bySeverity: {},
     byType: {},
     suspiciousIPs: {},
     failedLogins: {},
-    recentHighSeverity: []
+    recentHighSeverity: [],
   };
 
   const now = Date.now();
@@ -331,7 +332,8 @@ export async function analyzeSecurityLogs() {
 
   for (const log of logs) {
     // Подсчет по severity
-    analysis.bySeverity[log.severity] = (analysis.bySeverity[log.severity] || 0) + 1;
+    analysis.bySeverity[log.severity] =
+      (analysis.bySeverity[log.severity] || 0) + 1;
 
     // Подсчет по типу
     analysis.byType[log.type] = (analysis.byType[log.type] || 0) + 1;
@@ -360,4 +362,17 @@ export async function analyzeSecurityLogs() {
   return analysis;
 }
 
-
+/**
+ * Объект для логирования событий безопасности
+ */
+export const securityLoggerService = {
+  /**
+   * Логировать событие безопасности
+   */
+  log: (type, event) => {
+    logSecurityEvent({
+      type,
+      ...event,
+    });
+  },
+};

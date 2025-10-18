@@ -3,7 +3,7 @@
  * Не блокирует запросы, но логирует проблемы и предупреждает
  */
 
-import { securityLogger } from "./securityLogger.js";
+import { securityLoggerService } from "./securityLogger.js";
 
 /**
  * Валидация email
@@ -81,14 +81,24 @@ export function validatePhoneSoft(phone) {
   if (cleanPhone.length < 10) {
     return {
       isValid: false,
-      message: "Телефон должен содержать минимум 10 цифр",
+      message:
+        "Телефон должен содержать минимум 10 цифр. Правильный формат: +7 XXX XXX XXXX",
     };
   }
 
   if (cleanPhone.length > 11) {
     return {
       isValid: false,
-      message: "Телефон не должен содержать более 11 цифр",
+      message:
+        "Телефон не должен содержать более 11 цифр. Правильный формат: +7 XXX XXX XXXX",
+    };
+  }
+
+  if (cleanPhone.length === 11 && !cleanPhone.startsWith("7")) {
+    return {
+      isValid: false,
+      message:
+        "Телефон должен начинаться с +7. Правильный формат: +7 XXX XXX XXXX",
     };
   }
 
@@ -253,7 +263,7 @@ export function softValidationProfile(req, res, next) {
 
   // Логируем проблемы
   if (errors.length > 0) {
-    securityLogger.log("VALIDATION_WARNINGS", {
+    securityLoggerService.log("VALIDATION_WARNINGS", {
       endpoint: "/api/profile",
       errors,
       userId: req.user?.id,

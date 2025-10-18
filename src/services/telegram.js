@@ -278,6 +278,15 @@ export async function editTelegramMessage(
         "MESSAGE_TOO_OLD"
       );
     }
+
+    // Игнорируем ошибку если сообщение не изменилось
+    if (bodyText.includes("message is not modified")) {
+      console.log(
+        `Telegram message ${messageId} content is the same, skipping update`
+      );
+      return true;
+    }
+
     throw new BusinessLogicError(
       `Failed to edit Telegram message: ${res.status}`,
       "TELEGRAM_EDIT_FAILED",
@@ -371,6 +380,15 @@ export async function editTelegramMessageMedia(
         "MESSAGE_TOO_OLD"
       );
     }
+
+    // Игнорируем ошибку если сообщение не изменилось
+    if (bodyText.includes("message is not modified")) {
+      console.log(
+        `Telegram message ${messageId} content is the same, skipping update`
+      );
+      return true;
+    }
+
     throw new BusinessLogicError(
       `Failed to edit Telegram message media: ${res.status}`,
       "TELEGRAM_EDIT_MEDIA_FAILED",

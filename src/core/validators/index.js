@@ -183,10 +183,32 @@ export function validateUrl(value, fieldName = "value") {
  * Validate phone number (basic)
  */
 export function validatePhone(value, fieldName = "value") {
+  if (!value) {
+    throw new ValidationError(`${fieldName} is required`);
+  }
+
   const phoneRegex = /^[\d\s\-\+\(\)]+$/;
   if (!phoneRegex.test(value)) {
-    throw new ValidationError(`${fieldName} must be a valid phone number`);
+    throw new ValidationError(
+      `${fieldName} must be a valid phone number. Correct format: +7 XXX XXX XXXX`
+    );
   }
+
+  // Убираем все кроме цифр для проверки длины
+  const cleanPhone = value.replace(/\D/g, "");
+
+  if (cleanPhone.length !== 11) {
+    throw new ValidationError(
+      `${fieldName} must contain exactly 11 digits. Correct format: +7 XXX XXX XXXX`
+    );
+  }
+
+  if (!cleanPhone.startsWith("7")) {
+    throw new ValidationError(
+      `${fieldName} must start with +7. Correct format: +7 XXX XXX XXXX`
+    );
+  }
+
   return value.trim();
 }
 
