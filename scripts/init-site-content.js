@@ -1,4 +1,4 @@
-const { PrismaClient } = require("@prisma/client");
+import { PrismaClient } from "@prisma/client";
 
 const prisma = new PrismaClient();
 
@@ -110,17 +110,15 @@ Telegram: @lya_krevedko
 }
 
 // Запускаем инициализацию
-if (require.main === module) {
-  initSiteContent()
-    .then(() => {
-      console.log("🎉 Инициализация завершена успешно!");
-      process.exit(0);
-    })
-    .catch((error) => {
-      console.error("💥 Ошибка инициализации:", error);
-      process.exit(1);
-    });
-}
+initSiteContent()
+  .then(() => {
+    console.log("🎉 Инициализация завершена успешно!");
+    process.exit(0);
+  })
+  .catch((error) => {
+    console.error("💥 Ошибка инициализации:", error);
+    process.exit(1);
+  });
 
-module.exports = { initSiteContent };
+export { initSiteContent };
 
