@@ -303,7 +303,7 @@ export class AuthController extends BaseController {
     res.cookie("refresh_token", token, {
       httpOnly: true,
       secure: NODE_ENV === "production",
-      sameSite: "lax",
+      sameSite: NODE_ENV === "production" ? "none" : "lax",
       path: REFRESH_COOKIE_PATH,
       maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
     });
@@ -322,7 +322,8 @@ export class AuthController extends BaseController {
 
     res.clearCookie("refresh_token", {
       httpOnly: true,
-      sameSite: "lax",
+      sameSite: NODE_ENV === "production" ? "none" : "lax",
+      secure: NODE_ENV === "production",
       path: REFRESH_COOKIE_PATH,
     });
   }
