@@ -13,7 +13,8 @@ export class OrderService {
     collectionRepository,
     pricingService,
     inventoryService,
-    telegramBotService
+    telegramBotService,
+    prisma
   ) {
     this.orderRepo = orderRepository;
     this.cartRepo = cartRepository;
@@ -22,6 +23,7 @@ export class OrderService {
     this.pricingService = pricingService;
     this.inventoryService = inventoryService;
     this.telegramBotService = telegramBotService;
+    this.prisma = prisma;
   }
 
   /**
@@ -1009,7 +1011,8 @@ export class OrderService {
         data: {
           quantityDecimal: existingItem.quantityDecimal + quantity,
           subtotalKopecks:
-            (existingItem.quantityDecimal + quantity) * product.priceKopecks,
+            (existingItem.quantityDecimal + quantity) *
+            (product?.priceKopecks || existingItem.unitPriceKopecks || 0),
         },
       });
 
@@ -1076,11 +1079,12 @@ export class OrderService {
     }
 
     // Обновляем количество и сумму
+    const unitPrice = item.product?.priceKopecks || item.unitPriceKopecks || 0;
     const updatedItem = await this.prisma.orderItem.update({
       where: { id: itemId },
       data: {
         quantityDecimal: newQuantity,
-        subtotalKopecks: newQuantity * item.product.priceKopecks,
+        subtotalKopecks: newQuantity * unitPrice,
       },
     });
 

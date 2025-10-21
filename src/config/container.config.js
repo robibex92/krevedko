@@ -59,6 +59,7 @@ import { AnalyticsController } from "../controllers/AnalyticsController.js";
 import { BroadcastController } from "../controllers/BroadcastController.js";
 import { PublicController } from "../controllers/PublicController.js";
 import { OAuthController } from "../controllers/OAuthController.js";
+import { SiteContentController } from "../controllers/SiteContentController.js";
 
 /**
  * Configure dependency injection container
@@ -193,7 +194,8 @@ export function configureContainer(prisma) {
         c.resolve("collectionRepository"),
         c.resolve("pricingService"),
         c.resolve("inventoryService"),
-        c.resolve("telegramBotService")
+        c.resolve("telegramBotService"),
+        prisma
       )
   );
 
@@ -396,6 +398,11 @@ export function configureContainer(prisma) {
   container.register(
     "oauthController",
     (c) => new OAuthController(c.resolve("oauthService"))
+  );
+
+  container.register(
+    "siteContentController",
+    () => new SiteContentController()
   );
 
   return container;

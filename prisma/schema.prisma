@@ -527,3 +527,29 @@ model IdempotencyKey {
   @@index([sessionId])
   @@index([expiresAt])
 }
+
+model SiteContent {
+  id          Int      @id @default(autoincrement())
+  key         String   @unique // "about", "contacts", "faq"
+  title       String
+  content     String   @db.Text
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([key])
+  @@index([isActive])
+}
+
+model FAQItem {
+  id        Int      @id @default(autoincrement())
+  question  String
+  answer    String   @db.Text
+  order     Int      @default(0) // Порядок отображения
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([order])
+  @@index([isActive])
+}
