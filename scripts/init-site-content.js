@@ -87,12 +87,8 @@ Telegram: @lya_krevedko
     ];
 
     for (const faqItem of faqItems) {
-      await prisma.fAQItem.upsert({
-        where: {
-          question: faqItem.question,
-        },
-        update: {},
-        create: faqItem,
+      await prisma.fAQItem.create({
+        data: faqItem,
       });
     }
 
