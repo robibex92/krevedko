@@ -32,7 +32,9 @@ export class SiteContentController {
           where: { isActive: true },
           orderBy: { key: "asc" },
         });
+        console.log("SiteContent loaded:", content.length, "items");
       } catch (error) {
+        console.log("Error loading SiteContent:", error.message);
         // Таблица не существует, используем пустой массив
       }
 
@@ -41,7 +43,9 @@ export class SiteContentController {
           where: { isActive: true },
           orderBy: { order: "asc" },
         });
+        console.log("FAQItems loaded:", faqItems.length, "items");
       } catch (error) {
+        console.log("Error loading FAQItems:", error.message);
         // Таблица не существует, используем пустой массив
       }
 
@@ -247,6 +251,15 @@ export class SiteContentController {
    */
   async reorderFAQItems(req, res) {
     try {
+      console.log("reorderFAQItems called with:", req.body);
+
+      if (!this.prisma) {
+        return res.status(500).json({
+          success: false,
+          message: "Prisma client not initialized",
+        });
+      }
+
       const { items } = req.body; // [{ id, order }, ...]
 
       if (!Array.isArray(items)) {
@@ -256,13 +269,29 @@ export class SiteContentController {
         });
       }
 
+      console.log("Updating FAQ items order:", items);
+
+      // Проверяем, что все элементы имеют id
+      const invalidItems = items.filter((item) => !item.id || isNaN(item.id));
+      if (invalidItems.length > 0) {
+        console.error("Invalid items found:", invalidItems);
+        return res.status(400).json({
+          success: false,
+          message: "Некоторые элементы не имеют корректного id",
+          invalidItems: invalidItems,
+        });
+      }
+
       // Обновляем порядок для всех элементов
-      const updatePromises = items.map((item) =>
-        this.prisma.fAQItem.update({
-          where: { id: item.id },
+      const updatePromises = items.map((item) => {
+        console.log(
+          `Updating FAQ item ${item.id} (type: ${typeof item.id}) with order ${item.order}`
+        );
+        return this.prisma.fAQItem.update({
+          where: { id: parseInt(item.id) }, // Убеждаемся, что id - число
           data: { order: item.order },
-        })
-      );
+        });
+      });
 
       await Promise.all(updatePromises);
 

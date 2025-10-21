@@ -30,6 +30,10 @@ export function createSiteContentRoutes(container) {
     asyncHandler(siteContentController.createFAQItem)
   );
   router.put(
+    "/admin/site-content/faq/reorder",
+    asyncHandler(siteContentController.reorderFAQItems)
+  );
+  router.put(
     "/admin/site-content/faq/:id",
     asyncHandler(siteContentController.updateFAQItem)
   );
@@ -37,11 +41,6 @@ export function createSiteContentRoutes(container) {
     "/admin/site-content/faq/:id",
     asyncHandler(siteContentController.deleteFAQItem)
   );
-  router.put(
-    "/admin/site-content/faq/reorder",
-    asyncHandler(siteContentController.reorderFAQItems)
-  );
 
   return router;
 }
-
