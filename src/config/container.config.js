@@ -402,7 +402,7 @@ export function configureContainer(prisma) {
 
   container.register(
     "siteContentController",
-    () => new SiteContentController()
+    (c) => new SiteContentController(c.resolve("prisma"))
   );
 
   return container;

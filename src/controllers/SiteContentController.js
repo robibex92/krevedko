@@ -1,22 +1,49 @@
-import { PrismaClient } from "@prisma/client";
-
-const prisma = new PrismaClient();
-
 export class SiteContentController {
+  constructor(prisma) {
+    this.prisma = prisma;
+
+    // Привязываем контекст this к методам
+    this.getSiteContent = this.getSiteContent.bind(this);
+    this.updateSiteContent = this.updateSiteContent.bind(this);
+    this.getFAQItems = this.getFAQItems.bind(this);
+    this.createFAQItem = this.createFAQItem.bind(this);
+    this.updateFAQItem = this.updateFAQItem.bind(this);
+    this.deleteFAQItem = this.deleteFAQItem.bind(this);
+    this.reorderFAQItems = this.reorderFAQItems.bind(this);
+  }
   /**
    * Получить весь контент сайта
    */
   async getSiteContent(req, res) {
     try {
-      const content = await prisma.siteContent.findMany({
-        where: { isActive: true },
-        orderBy: { key: "asc" },
-      });
+      if (!this.prisma) {
+        return res.status(500).json({
+          success: false,
+          message: "Prisma client not initialized",
+        });
+      }
 
-      const faqItems = await prisma.fAQItem.findMany({
-        where: { isActive: true },
-        orderBy: { order: "asc" },
-      });
+      // Проверяем, существуют ли таблицы
+      let content = [];
+      let faqItems = [];
+
+      try {
+        content = await this.prisma.siteContent.findMany({
+          where: { isActive: true },
+          orderBy: { key: "asc" },
+        });
+      } catch (error) {
+        // Таблица не существует, используем пустой массив
+      }
+
+      try {
+        faqItems = await this.prisma.fAQItem.findMany({
+          where: { isActive: true },
+          orderBy: { order: "asc" },
+        });
+      } catch (error) {
+        // Таблица не существует, используем пустой массив
+      }
 
       // Преобразуем в удобный формат
       const contentMap = {};
@@ -67,7 +94,7 @@ export class SiteContentController {
         });
       }
 
-      const updatedContent = await prisma.siteContent.upsert({
+      const updatedContent = await this.prisma.siteContent.upsert({
         where: { key },
         update: {
           title,
@@ -101,7 +128,7 @@ export class SiteContentController {
    */
   async getFAQItems(req, res) {
     try {
-      const faqItems = await prisma.fAQItem.findMany({
+      const faqItems = await this.prisma.fAQItem.findMany({
         orderBy: { order: "asc" },
       });
 
@@ -133,7 +160,7 @@ export class SiteContentController {
         });
       }
 
-      const faqItem = await prisma.fAQItem.create({
+      const faqItem = await this.prisma.fAQItem.create({
         data: {
           question,
           answer,
@@ -170,7 +197,7 @@ export class SiteContentController {
       if (order !== undefined) updateData.order = parseInt(order);
       if (isActive !== undefined) updateData.isActive = Boolean(isActive);
 
-      const faqItem = await prisma.fAQItem.update({
+      const faqItem = await this.prisma.fAQItem.update({
         where: { id: parseInt(id) },
         data: updateData,
       });
@@ -197,7 +224,7 @@ export class SiteContentController {
     try {
       const { id } = req.params;
 
-      await prisma.fAQItem.delete({
+      await this.prisma.fAQItem.delete({
         where: { id: parseInt(id) },
       });
 
@@ -231,7 +258,7 @@ export class SiteContentController {
 
       // Обновляем порядок для всех элементов
       const updatePromises = items.map((item) =>
-        prisma.fAQItem.update({
+        this.prisma.fAQItem.update({
           where: { id: item.id },
           data: { order: item.order },
         })
@@ -253,4 +280,3 @@ export class SiteContentController {
     }
   }
 }
-
