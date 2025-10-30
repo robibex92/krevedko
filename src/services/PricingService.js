@@ -107,7 +107,9 @@ export class PricingService {
    * Format price from kopecks
    */
   formatPrice(kopecks) {
-    const rubles = dec(kopecks).div(100);
-    return `${rubles.toFixed(2)} ₽`;
+    const rub = dec(kopecks).div(100).toNumber();
+    const fixed = rub.toFixed(2);
+    const trimmed = fixed.replace(/\.00$/, "").replace(/(\.\d)0$/, "$1");
+    return `${trimmed} ₽`;
   }
 }

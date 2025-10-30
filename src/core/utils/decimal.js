@@ -50,6 +50,8 @@ export function rublesToKopecks(rubles) {
  * Format price
  */
 export function formatPrice(kopecks) {
-  const rubles = kopecksToRubles(kopecks);
-  return `${rubles.toFixed(2)} ₽`;
+  const rub = kopecksToRubles(kopecks).toNumber();
+  const fixed = rub.toFixed(2);
+  const trimmed = fixed.replace(/\.00$/, "").replace(/(\.\d)0$/, "$1");
+  return `${trimmed} ₽`;
 }

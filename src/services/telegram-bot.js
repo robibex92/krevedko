@@ -16,8 +16,10 @@ const MESSAGE_EDIT_WINDOW = 48 * 60 * 60 * 1000; // 48 часов в милли�
  * Форматирование цены из копеек в рубли
  */
 function formatPrice(kopecks) {
-  const rubles = (kopecks / 100).toFixed(2);
-  return `${rubles} ₽`;
+  const value = Number(kopecks || 0) / 100;
+  const fixed = value.toFixed(2);
+  const trimmed = fixed.replace(/\.00$/, "").replace(/(\.\d)0$/, "$1");
+  return `${trimmed} ₽`;
 }
 
 /**
