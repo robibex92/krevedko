@@ -1003,6 +1003,41 @@ export async function removeProductFromQuickPickup(prisma, productId) {
 }
 
 /**
+ * Полное удаление сообщений о товаре из всех категорий (без зачёркивания)
+ */
+export async function removeProductFromAllCategories(prisma, productId) {
+  try {
+    const messages = await prisma.productTelegramMessage.findMany({
+      where: { productId },
+      include: { category: true },
+    });
+
+    for (const messageRecord of messages) {
+      const chatId = messageRecord.category.telegramChatId;
+      const messageId = messageRecord.messageId;
+      try {
+        await deleteTelegramMessage(chatId, messageId);
+      } catch (error) {
+        console.log(
+          `Failed to delete category message ${messageId}, continuing:`,
+          error.message
+        );
+      }
+    }
+
+    if (messages.length > 0) {
+      await prisma.productTelegramMessage.deleteMany({ where: { productId } });
+    }
+  } catch (error) {
+    console.error(
+      `Failed to remove product ${productId} from categories:`,
+      error
+    );
+    // Не бросаем исключение: удаление в TG не критично для удаления товара
+  }
+}
+
+/**
  * Отправка отзыва в чат отзывов
  */
 export async function sendReviewToChat(prisma, review, user) {
