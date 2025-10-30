@@ -23,8 +23,8 @@ import { createOAuthRoutes } from "./routes/v2/oauth.routes.js";
 
 // OAuth strategies
 import { configureGoogleStrategy } from "./auth/strategies/google.strategy.js";
-import { configureYandexStrategy } from "./auth/strategies/yandex.strategy.js";
-import { configureMailRuStrategy } from "./auth/strategies/mailru.strategy.js";
+//import { configureYandexStrategy } from "./auth/strategies/yandex.strategy.js";
+//import { configureMailRuStrategy } from "./auth/strategies/mailru.strategy.js";
 
 import { csrfIssue, csrfProtect } from "./middleware/csrf.js";
 import { requireAuth, requireAdmin } from "./middleware/auth.js";
@@ -67,8 +67,8 @@ const container = configureContainer(prisma);
 // Configure Passport.js OAuth strategies
 const oauthService = container.resolve("oauthService");
 configureGoogleStrategy(passport, oauthService);
-configureYandexStrategy(passport, oauthService);
-configureMailRuStrategy(passport, oauthService);
+//configureYandexStrategy(passport, oauthService);
+//configureMailRuStrategy(passport, oauthService);
 
 // App locals (legacy support - will be removed gradually)
 app.locals.prisma = prisma; // ✅ Required for legacy routes (auth, cart, favorites, etc.)
@@ -77,7 +77,10 @@ app.locals.csrfSecrets = new Map();
 app.locals.api = { baseUrl: API_URL, fetchJson: null };
 
 // Ensure runtime folders exist
-const uploadRoot = path.resolve(__dirname, "../uploads");
+// Корень загрузок можно задать через UPLOAD_ROOT, по умолчанию /var/www/uploads
+const uploadRoot = process.env.UPLOAD_ROOT
+  ? path.resolve(process.env.UPLOAD_ROOT)
+  : "/var/www/uploads";
 const uploadProductsDir = path.join(uploadRoot, "products");
 const uploadPaymentsDir = path.join(uploadRoot, "payments");
 const uploadAvatarsDir = path.join(uploadRoot, "avatars");
@@ -253,7 +256,10 @@ app.use("/api", createV2Routes(container));
 
 // Временный тестовый маршрут для отладки
 app.get("/api/test-server", (req, res) => {
-  res.json({ message: "Server is working with new changes!", timestamp: new Date().toISOString() });
+  res.json({
+    message: "Server is working with new changes!",
+    timestamp: new Date().toISOString(),
+  });
 });
 
 // OAuth routes (Google, Yandex, Mail.ru)

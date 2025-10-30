@@ -13,7 +13,11 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 // --- директории для загрузок ---
-const uploadRoot = path.resolve(process.cwd(), "uploads");
+// Корень загрузок можно переопределить переменной окружения UPLOAD_ROOT
+// По умолчанию используем /var/www/uploads (новая серверная директория)
+const uploadRoot = process.env.UPLOAD_ROOT
+  ? path.resolve(process.env.UPLOAD_ROOT)
+  : "/var/www/uploads";
 export const uploadProductsDir = path.join(uploadRoot, "products");
 export const uploadPaymentsDir = path.join(uploadRoot, "payments");
 export const uploadAvatarsDir = path.join(uploadRoot, "avatars");
@@ -391,13 +395,3 @@ export const notificationUploadBase = makeImageUpload({
   maxFiles: 3,
   fileSizeMb: 8,
 });
-
-// --- тестовый роут для проверки ---
-// пример использования (добавь в сервер):
-//
-// import { productUpload } from "./upload.js";
-// app.post("/api/test-upload", productUpload.single("image"), (req, res) => {
-//   if (!req.file) return res.status(400).json({ error: "Файл не принят" });
-//   console.log("[upload] saved:", req.file);
-//   res.json({ ok: true, path: `/uploads/products/${req.file.filename}` });
-// });
