@@ -1207,12 +1207,25 @@ export async function sendOrderNotificationToAdmin(prisma, order, user) {
       if (orderUser.email) {
         lines.push(`📧 Email: ${orderUser.email}`);
       }
-      // Приоритет: телефон из заказа (contactPhone) > телефон из профиля
-      const phoneFromOrder = fullOrder.contactPhone || fullOrder.guestPhone;
+      // Приоритет: телефон из заказа (contactPhone/guestPhone) > телефон профиля
+      const normalizePhone = (phone) => {
+        if (!phone) return null;
+        const digits = String(phone).replace(/\D/g, "");
+        if (!digits) return null;
+        let normalized = digits;
+        if (normalized.startsWith("8")) normalized = "7" + normalized.slice(1);
+        if (!normalized.startsWith("7")) normalized = "7" + normalized; // fallback
+        return `+${normalized}`;
+      };
+
+      const phoneFromOrderRaw = fullOrder.contactPhone || fullOrder.guestPhone;
+      const phoneFromOrder = normalizePhone(phoneFromOrderRaw);
+      const phoneFromProfile = normalizePhone(orderUser.phone);
+
       if (phoneFromOrder) {
         lines.push(`📞 Телефон: ${phoneFromOrder}`);
-      } else if (orderUser.phone) {
-        lines.push(`📞 Телефон: ${orderUser.phone}`);
+      } else if (phoneFromProfile) {
+        lines.push(`📞 Телефон: ${phoneFromProfile}`);
       }
     } else if (fullOrder.isGuestOrder) {
       lines.push(`👤 Гостевой заказ`);
