@@ -31,6 +31,29 @@ export class BaseController {
     return res.status(204).send();
   }
 
+  /** Error helpers */
+  badRequest(res, message = "Bad Request", data = undefined) {
+    const payload = { success: false, error: "BAD_REQUEST", message };
+    if (data) Object.assign(payload, data);
+    return res.status(400).json(payload);
+  }
+
+  unauthorized(res, message = "Unauthorized") {
+    return res.status(401).json({ success: false, error: "UNAUTHORIZED", message });
+  }
+
+  forbidden(res, message = "Forbidden") {
+    return res.status(403).json({ success: false, error: "FORBIDDEN", message });
+  }
+
+  notFound(res, message = "Not Found") {
+    return res.status(404).json({ success: false, error: "NOT_FOUND", message });
+  }
+
+  serverError(res, message = "Internal Server Error") {
+    return res.status(500).json({ success: false, error: "INTERNAL_SERVER_ERROR", message });
+  }
+
   /**
    * Bind all methods to instance (for auto-binding in routes)
    */

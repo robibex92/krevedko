@@ -68,19 +68,37 @@ export class OrderService {
     // Create order in transaction
     const order = await this.orderRepo.prisma.$transaction(async (tx) => {
       // Create order without orderNumber first
-      const createdOrder = await tx.order.create({
-        data: {
-          userId,
-          collectionId,
-          status: "SUBMITTED",
-          totalKopecks: finalTotal.toNumber(),
-          deliveryType: deliveryData.deliveryType || "PICKUP",
-          deliveryAddress: deliveryData.deliveryAddress || null,
-          deliveryCost,
-          paymentMethod: deliveryData.paymentMethod || "development",
-          contactPhone: deliveryData.contactPhone || null,
-        },
-      });
+      let createdOrder;
+      try {
+        createdOrder = await tx.order.create({
+          data: {
+            userId,
+            collectionId,
+            status: "SUBMITTED",
+            totalKopecks: finalTotal.toNumber(),
+            deliveryType: deliveryData.deliveryType || "PICKUP",
+            deliveryAddress: deliveryData.deliveryAddress || null,
+            deliveryCost,
+            paymentMethod: deliveryData.paymentMethod || "development",
+            contactPhone: deliveryData.contactPhone || null,
+          },
+        });
+      } catch (err) {
+        // Если схема БД не мигрирована и поле отсутствует, пробуем без contactPhone
+        console.warn("Order create with contactPhone failed, retrying without it:", err?.message || err);
+        createdOrder = await tx.order.create({
+          data: {
+            userId,
+            collectionId,
+            status: "SUBMITTED",
+            totalKopecks: finalTotal.toNumber(),
+            deliveryType: deliveryData.deliveryType || "PICKUP",
+            deliveryAddress: deliveryData.deliveryAddress || null,
+            deliveryCost,
+            paymentMethod: deliveryData.paymentMethod || "development",
+          },
+        });
+      }
 
       // Generate and update order number based on order ID
       const orderNumber = this._generateOrderNumber(createdOrder.id);
