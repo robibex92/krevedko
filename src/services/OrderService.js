@@ -163,24 +163,35 @@ export class OrderService {
    * Update order status
    */
   async updateStatus(orderId, newStatus) {
-    const allowedStatuses = [
-      "SUBMITTED",
-      "IN_PROGRESS",
-      "COMPLETED",
-      "CANCELLED",
-    ];
-    if (!allowedStatuses.includes(newStatus)) {
-      throw new ValidationError("Invalid status");
+    try {
+      const allowedStatuses = [
+        "SUBMITTED",
+        "IN_PROGRESS",
+        "COMPLETED",
+        "CANCELLED",
+      ];
+      if (!allowedStatuses.includes(newStatus)) {
+        throw new ValidationError("Invalid status");
+      }
+
+      const order = await this.orderRepo.findByIdOrFail(orderId);
+
+      // If cancelling, return stock
+      if (newStatus === "CANCELLED" && order.status !== "CANCELLED") {
+        // Возвращаем товары на склад (не блокируем отмену, если что-то пошло не так)
+        await this._returnStockForOrder(orderId);
+      }
+
+      return await this.orderRepo.updateStatus(orderId, newStatus);
+    } catch (error) {
+      console.error("Error in updateStatus:", {
+        orderId,
+        newStatus,
+        error: error.message || error,
+        stack: error.stack,
+      });
+      throw error;
     }
-
-    const order = await this.orderRepo.findByIdOrFail(orderId);
-
-    // If cancelling, return stock
-    if (newStatus === "CANCELLED" && order.status !== "CANCELLED") {
-      await this._returnStockForOrder(orderId);
-    }
-
-    return this.orderRepo.updateStatus(orderId, newStatus);
   }
 
   /**
@@ -351,26 +362,57 @@ export class OrderService {
    * Private: Return stock for cancelled order
    */
   async _returnStockForOrder(orderId) {
-    const order = await this.orderRepo.findOne(
-      { id: orderId },
-      { include: { items: true } }
-    );
+    try {
+      const order = await this.orderRepo.findOne(
+        { id: orderId },
+        { include: { items: true } }
+      );
 
-    if (!order) return;
-
-    for (const item of order.items) {
-      try {
-        await this.inventoryService.increaseStock(
-          this.orderRepo.prisma,
-          item.productId,
-          item.quantityDecimal.toString()
+      if (!order || !order.items || order.items.length === 0) {
+        console.warn(
+          `Order ${orderId} not found or has no items to return stock`
         );
-      } catch (error) {
-        console.error(
-          `Failed to return stock for product ${item.productId}:`,
-          error
-        );
+        return;
       }
+
+      for (const item of order.items) {
+        if (!item.productId) {
+          console.warn(
+            `Order item ${item.id} has no productId, skipping stock return`
+          );
+          continue;
+        }
+
+        // Проверяем, что quantityDecimal существует и является валидным числом
+        const quantity = item.quantityDecimal ?? item.quantity;
+        if (!quantity || isNaN(Number(quantity))) {
+          console.warn(
+            `Order item ${item.id} has invalid quantity (${quantity}), skipping stock return`
+          );
+          continue;
+        }
+
+        try {
+          await this.inventoryService.increaseStock(
+            this.orderRepo.prisma,
+            item.productId,
+            quantity.toString()
+          );
+        } catch (error) {
+          console.error(
+            `Failed to return stock for product ${item.productId}:`,
+            error.message || error
+          );
+          // Не прерываем процесс, продолжаем с другими товарами
+        }
+      }
+    } catch (error) {
+      console.error(
+        `Error in _returnStockForOrder for order ${orderId}:`,
+        error.message || error
+      );
+      // Не пробрасываем ошибку, чтобы не блокировать отмену заказа
+      // Логируем для отладки
     }
   }
 

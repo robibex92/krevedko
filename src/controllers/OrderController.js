@@ -222,12 +222,28 @@ export class OrderController extends BaseController {
    * PATCH /api/admin/orders/:id/status
    */
   async updateOrderStatus(req, res) {
-    const orderId = Number(req.params.id);
-    const { status } = req.body || {};
+    try {
+      const orderId = Number(req.params.id);
+      const { status } = req.body || {};
 
-    const order = await this.orderService.updateStatus(orderId, status);
+      if (!status) {
+        return this.badRequest(res, "Status is required");
+      }
 
-    return this.success(res, { order });
+      const order = await this.orderService.updateStatus(orderId, status);
+
+      return this.success(res, { order });
+    } catch (error) {
+      console.error("Error updating order status:", {
+        orderId: req.params.id,
+        status: req.body?.status,
+        error: error.message || error,
+        stack: error.stack,
+      });
+
+      // Пробрасываем ошибку дальше для обработки в asyncHandler
+      throw error;
+    }
   }
 
   /**
