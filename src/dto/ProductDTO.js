@@ -12,6 +12,7 @@ export function toProductListDTO(product) {
   return {
     id: product.id,
     title: product.title,
+    description: product.description, // include short description in list view
     priceKopecks: product.priceKopecks,
     imagePath: product.imagePath,
     unitLabel: product.unitLabel,
