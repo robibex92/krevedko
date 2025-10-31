@@ -1207,7 +1207,11 @@ export async function sendOrderNotificationToAdmin(prisma, order, user) {
       if (orderUser.email) {
         lines.push(`📧 Email: ${orderUser.email}`);
       }
-      if (orderUser.phone) {
+      // Приоритет: телефон из заказа (contactPhone) > телефон из профиля
+      const phoneFromOrder = fullOrder.contactPhone || fullOrder.guestPhone;
+      if (phoneFromOrder) {
+        lines.push(`📞 Телефон: ${phoneFromOrder}`);
+      } else if (orderUser.phone) {
         lines.push(`📞 Телефон: ${orderUser.phone}`);
       }
     } else if (fullOrder.isGuestOrder) {
