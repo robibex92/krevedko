@@ -422,22 +422,34 @@ export class OrderController extends BaseController {
   /**
    * Изменение статуса заказа (только админы)
    * PATCH /api/orders/:id/status
+   * 
+   * NOTE: Этот метод используется для order-management routes
+   * Для admin routes используется метод выше (строка 224)
    */
-  async updateOrderStatus(req, res) {
-    const orderId = Number(req.params.id);
-    const { status, reason } = req.body;
+  async updateOrderStatusForManagement(req, res) {
+    try {
+      const orderId = Number(req.params.id);
+      const { status, reason } = req.body || {};
 
-    if (!status) {
-      return this.badRequest(res, "Необходимо указать статус");
+      if (!status) {
+        return this.badRequest(res, "Необходимо указать статус");
+      }
+
+      const order = await this.orderService.updateStatus(orderId, status);
+
+      // reason игнорируется, так как updateStatus не поддерживает reason
+      // Можно добавить логирование reason при необходимости
+
+      return this.success(res, { order }, "Статус заказа обновлен");
+    } catch (error) {
+      console.error("Error updating order status (management):", {
+        orderId: req.params.id,
+        status: req.body?.status,
+        error: error.message || error,
+        stack: error.stack,
+      });
+      throw error;
     }
-
-    const result = await this.orderService.updateOrderStatus(
-      orderId,
-      status,
-      reason
-    );
-
-    return this.success(res, result, "Статус заказа обновлен");
   }
 
   /**

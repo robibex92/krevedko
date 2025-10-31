@@ -60,7 +60,7 @@ export function createOrderManagementRoutes(container) {
   router.patch(
     "/orders/:id/status",
     requireAdmin,
-    asyncHandler(orderController.updateOrderStatus)
+    asyncHandler(orderController.updateOrderStatusForManagement)
   );
 
   // Получение доступных действий
