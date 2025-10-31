@@ -78,6 +78,7 @@ export class OrderService {
           deliveryAddress: deliveryData.deliveryAddress || null,
           deliveryCost,
           paymentMethod: deliveryData.paymentMethod || "development",
+          contactPhone: deliveryData.contactPhone || null,
         },
       });
 
@@ -119,6 +120,25 @@ export class OrderService {
 
       return createdOrder;
     });
+
+    // Optionally update user's phone if missing and provided
+    try {
+      if (userId && deliveryData.contactPhone) {
+        const user = await this.prisma.user.findUnique({
+          where: { id: userId },
+          select: { phone: true },
+        });
+        if (!user?.phone) {
+          await this.prisma.user.update({
+            where: { id: userId },
+            data: { phone: deliveryData.contactPhone },
+          });
+        }
+      }
+    } catch (e) {
+      // non-blocking
+      console.warn("Failed to update user phone from order:", e);
+    }
 
     // Send notification to admin via Telegram
     if (this.telegramBotService) {

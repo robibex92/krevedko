@@ -30,6 +30,7 @@ export class OrderController extends BaseController {
               collectionId: payload.collection_id ?? payload.collectionId,
               deliveryType: payload.deliveryType || "PICKUP",
               deliveryAddress: payload.deliveryAddress || null,
+              contactPhone: payload.contactPhone || null,
             },
           ];
 
@@ -53,6 +54,7 @@ export class OrderController extends BaseController {
             deliveryType: orderData.deliveryType || "PICKUP",
             deliveryAddress: orderData.deliveryAddress || null,
             paymentMethod: orderData.paymentMethod || "development", // Временно "в разработке"
+            contactPhone: orderData.contactPhone || null,
           }
         );
 
@@ -407,7 +409,7 @@ export class OrderController extends BaseController {
     });
 
     if (!item) {
-      return this.notFound(res, "Товар не найден");
+      return this.badRequest(res, "Товар не найден в заказе");
     }
 
     const result = await this.orderService.updateItemQuantity(
@@ -416,7 +418,7 @@ export class OrderController extends BaseController {
       quantity
     );
 
-    return this.success(res, result, "Количество товара обновлено");
+    return this.success(res, result, "Количество обновлено");
   }
 
   /**
